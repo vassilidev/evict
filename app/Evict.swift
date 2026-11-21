@@ -18,7 +18,7 @@ struct EvictApp: App {
                 .preferredColorScheme(.dark)
                 .onAppear {
                     if model.state == .idle { model.start() }
-                    Task { await model.checkForUpdates(manual: false) }
+                    model.watchForUpdates()
                 }
         }
         .commands {
@@ -40,13 +40,31 @@ final class Model: ObservableObject {
     @Published var update: Updater.Release?
     @Published var updating = false
     weak var webView: WKWebView?
+    private var watching = false
+
+    // At launch, then every 6 hours for Macs that keep Evict open
+    func watchForUpdates() {
+        guard !watching else { return }
+        watching = true
+        Task {
+            while true {
+                await checkForUpdates(manual: false)
+                try? await Task.sleep(for: .seconds(6 * 3600))
+            }
+        }
+    }
 
     func checkForUpdates(manual: Bool) async {
         do {
             let release = try await Updater.latest()
             if Updater.isNewer(release) {
                 update = release
-                if manual { promptUpdate() }
+                // Each new version is announced once; the toolbar button stays as the reminder
+                let announced = UserDefaults.standard.string(forKey: "announcedVersion")
+                if manual || announced != release.version {
+                    UserDefaults.standard.set(release.version, forKey: "announcedVersion")
+                    promptUpdate()
+                }
             } else if manual {
                 inform("Evict is up to date", "You’re running the latest version (\(Updater.current)).")
             }
@@ -59,8 +77,8 @@ final class Model: ObservableObject {
         guard let release = update, !updating else { return }
         let alert = NSAlert()
         alert.messageText = "Evict \(release.version) is available"
-        let notes = release.body.map { $0.replacingOccurrences(of: "**", with: "") + "\n\n" } ?? ""
-        alert.informativeText = "You’re running version \(Updater.current).\n\n\(notes)After the update, macOS will ask for Full Disk Access again."
+        let notes = release.body.map { "\n\n" + $0.replacingOccurrences(of: "**", with: "") } ?? ""
+        alert.informativeText = "You’re running version \(Updater.current).\(notes)"
         alert.addButton(withTitle: "Install and Relaunch")
         alert.addButton(withTitle: "Later")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -136,6 +154,7 @@ final class Model: ObservableObject {
     }
 
     nonisolated static func runScan(scanner: URL, template: URL, progress: @escaping @Sendable (UInt64) -> Void) -> Result<URL, Error> {
+        _ = claude  // resolved during the scan rather than on the main thread when the page opens
         let process = Process(), out = Pipe(), err = Pipe()
         process.executableURL = scanner
         process.arguments = ["/"]
@@ -252,6 +271,54 @@ final class Model: ObservableObject {
         guard let arg = try? String(data: JSONEncoder().encode(path), encoding: .utf8) else { return }
         webView?.evaluateJavaScript("evictRemoved(\(arg), \(freed))")
     }
+
+    // GUI apps don't get the shell's PATH: look where Claude Code's installers put the CLI, then ask a login shell
+    nonisolated static let claude: String? = {
+        let home = NSHomeDirectory()
+        let known = ["\(home)/.local/bin/claude", "\(home)/.claude/local/claude", "/opt/homebrew/bin/claude", "/usr/local/bin/claude"]
+        if let path = known.first(where: FileManager.default.isExecutableFile(atPath:)) { return path }
+        let process = Process(), out = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", "command -v claude"]
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return nil }
+        let path = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        process.waitUntilExit()
+        return path.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: path) ? path : nil
+    }()
+
+    func ask(id: Int, prompt: String) {
+        Task {
+            let (text, ok) = await Task.detached { Model.askClaude(prompt) }.value
+            answer(id, text, ok)
+        }
+    }
+
+    private func answer(_ id: Int, _ text: String, _ ok: Bool) {
+        guard let arg = try? String(data: JSONEncoder().encode(text), encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("evictAnswer(\(id), \(arg), \(ok))")
+    }
+
+    nonisolated static func askClaude(_ prompt: String) -> (String, Bool) {
+        guard let claude else { return ("Claude Code isn’t installed.", false) }
+        let process = Process(), out = Pipe()
+        process.executableURL = URL(fileURLWithPath: claude)
+        // No tools at all: Claude can only answer, it can't read, run or delete anything
+        process.arguments = ["-p", "--tools", "", "--no-session-persistence", "--append-system-prompt", "Reply in plain text, without Markdown.", prompt]
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = out
+        process.standardError = out
+        do {
+            try process.run()
+            let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            process.waitUntilExit()
+            return (text, process.terminationStatus == 0)
+        } catch {
+            return (error.localizedDescription, false)
+        }
+    }
 }
 
 struct ContentView: View {
@@ -360,6 +427,8 @@ struct WebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "evict")
+        let flags = "window.evictClaude = \(Model.claude != nil); window.evictLang = '\(Locale.preferredLanguages.first ?? "en")';"
+        config.userContentController.addUserScript(WKUserScript(source: flags, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         let view = WKWebView(frame: .zero, configuration: config)
         view.setValue(false, forKey: "drawsBackground")  // no white flash before the page paints
         model.webView = view
@@ -388,6 +457,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             case "delete":
                 guard let path = body["path"] as? String else { return }
                 model.confirmDelete(path: path, size: (body["size"] as? NSNumber)?.int64Value ?? 0)
+            case "ask":
+                guard let id = body["id"] as? Int, let prompt = body["prompt"] as? String else { return }
+                model.ask(id: id, prompt: prompt)
             default:
                 break
             }

@@ -6,8 +6,8 @@
 
 <p align="center">
   <b>The bouncer for your disk.</b><br>
-  Evict scans your <i>entire</i> Mac in seconds and shows, as proportional boxes,<br>
-  what is really taking up space. Click, drill down, clean up.
+  Evict scans your <i>entire</i> Mac in seconds and shows, as proportional boxes<br>
+  or a sorted list, what is really taking up space. Search, ask, clean up.
 </p>
 
 <p align="center">
@@ -21,17 +21,22 @@
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-111?logo=apple">
   <img alt="C + SwiftUI" src="https://img.shields.io/badge/C%20%2B%20SwiftUI-native-e0473d">
   <img alt="Zero dependencies" src="https://img.shields.io/badge/dependencies-0-2ea36b">
-  <img alt="100% local" src="https://img.shields.io/badge/100%25-local%2C%20no%20AI-3d7fe6">
+  <img alt="100% local scan" src="https://img.shields.io/badge/scan-100%25%20local-3d7fe6">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8b93a1">
 </p>
 
 ![Evict: the disk as a treemap of proportional boxes](docs/screenshot.png)
-<p align="center"><sub>Screenshot taken on a fictional disk.</sub></p>
+
+![Evict's list view: folders sorted by size and expanded in place](docs/list.png)
+<p align="center"><sub>Screenshots taken on a fictional disk.</sub></p>
 
 ## What Evict does
 
 - **The whole disk, fast**: 5.7 million files (426 GB) in 20 s on a Mac mini M4 Pro, and 27 s cold, right after a reboot.
 - **A treemap**, finviz-style: each box's area is proportional to the space it takes. Click to drill into a folder, use the breadcrumb to go back up.
+- **A list view**: the same folder as a tree sorted by size, with bars and percentages. Expand folders in place to see the biggest items at a glance.
+- **Search** (`⌘F` or `/`) across the whole scan: every file and folder whose name matches, biggest first. Click a result to jump to it.
+- **Ask AI** what a folder or file is: Evict writes a prompt with its path, size and largest items, and asks what it is, which app creates it, whether it's safe to delete and how to clean it properly. Nothing is deleted. In the app, the answer comes from [Claude Code](https://claude.com/claude-code) when it's installed (run without any tools, so it can only answer). Otherwise the prompt is copied, ready to paste into any AI chat.
 - **Colors that tell you something**:
   - 🟥 **regenerable**: caches, `node_modules`, DerivedData, builds, `.venv`…
   - 🟧 **archives and disk images**: zip, dmg, iso, VM images…
@@ -41,8 +46,8 @@
 - **Built-in cleanup** (app): move to Trash or delete permanently. The administrator password is only asked for when needed, and system paths are protected.
 - **Show in Finder** for any file or folder.
 - **Hide a folder** (`System`, for example) to give the rest more room. The choice is remembered across scans.
-- **Built-in updates**: Evict checks GitHub for new versions and installs them in one click.
-- **100% local**: your files never leave your Mac. No AI, no telemetry, no dependencies, just a C scanner and an HTML page. The only network request is the update check against GitHub.
+- **Built-in updates**: Evict checks GitHub for new versions at launch and every 6 hours, tells you when one is out, and installs it in one click.
+- **100% local**: the scan never leaves your Mac. No telemetry, no dependencies, just a C scanner and an HTML page. The only network requests are the update check against GitHub and, when you click **Ask Claude**, that one prompt.
 
 ## Install
 
@@ -50,15 +55,13 @@
 
 **[⬇ Download Evict.dmg](https://github.com/vassilidev/evict/releases/latest/download/Evict.dmg)** (macOS 13+, Apple Silicon and Intel). Open the DMG, then drag Evict into Applications.
 
-> Evict is not notarized by Apple, since that needs a paid developer account. macOS therefore blocks the first launch. Go to **System Settings → Privacy & Security** and click **Open Anyway**. You only need to do this once.
-> From a terminal, this does the same: `xattr -dr com.apple.quarantine /Applications/Evict.app`
+Evict is signed with a Developer ID and notarized by Apple, so it opens like any other app.
 
 > **On first launch**, Evict asks for **Full Disk Access**. Without it, macOS interrupts the scan with one permission prompt per protected folder (Desktop, Documents, other apps' data…). Click **Open System Settings**, turn Evict on, and the scan starts by itself. **Scan Anyway** is still available.
-> Evict has no Apple signature, so macOS asks for this access again after each update.
 
 ### Updates
 
-Evict checks for new versions at launch and shows an **Update** button in the toolbar when one is available. You can also use **Evict → Check for Updates…** in the menu bar, or update from a terminal:
+Updates come from [GitHub Releases](https://github.com/vassilidev/evict/releases), not from git: each release ships the signed DMG built by CI. Evict checks for a new version at launch and every 6 hours. When one is out, it tells you once, then keeps an **Update** button in the toolbar. **Install and Relaunch** downloads the DMG, checks it really contains Evict, swaps the app in place and reopens it. You can also use **Evict → Check for Updates…** in the menu bar, or update from a terminal:
 
 ```sh
 /Applications/Evict.app/Contents/MacOS/Evict --update
@@ -74,7 +77,7 @@ cd evict
 ./install.sh
 ```
 
-`install.sh` builds Evict.app, installs it in `/Applications` (or `~/Applications`), then opens it. After that, launch Evict from Spotlight whenever you like, and press **⌘R** to rescan.
+`install.sh` builds Evict.app, installs it in `/Applications` (or `~/Applications`), then opens it. After that, launch Evict from Spotlight whenever you like, and press **⌘R** to rescan. To update a build from source, `git pull && ./install.sh`; the in-app updater also works and replaces it with the latest release.
 
 ### Command line
 
@@ -83,14 +86,18 @@ cd evict
 ./evict ~/Projects   # a single folder
 ```
 
-In the browser, a web page can't delete files or drive Finder, so the menu copies terminal commands instead: **Copy rm -rf command**, and an `open -R` command for **Show in Finder**.
+In the browser, a web page can't delete files, drive Finder or run Claude Code, so the menu copies text instead: **Copy rm -rf command**, an `open -R` command for **Show in Finder**, and the prompt for **Copy AI prompt**.
 
 ## Usage
 
 | Action | Result |
 | --- | --- |
-| Click a folder | Drill into it |
-| Click a file · right-click | Menu: open, show in Finder, copy path, hide, delete |
+| Click a folder | Drill into it (map) · expand it in place (list) |
+| Double-click a folder (list) | Drill into it |
+| Click a file · right-click · `⋯` | Menu: open, show in Finder, copy path, ask AI, hide, delete |
+| **Map** / **List** | Switch views (remembered) |
+| `⌘F` or `/` | Search files and folders · `Esc` clears |
+| **Ask Claude** / **Copy AI prompt** | Ask what the current folder is |
 | `⌫` or `Esc` | Go up one level |
 | Click a category | Highlight it |
 | "N hidden" button | Show hidden folders again |
@@ -132,7 +139,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.2.0 && git push origin v1.2.0
+git tag v1.3.0 && git push origin v1.3.0
 ```
 
 ## Known limitations
@@ -140,6 +147,7 @@ git tag v1.2.0 && git push origin v1.2.0
 - **macOS only for now**: [Linux](https://github.com/vassilidev/evict/issues/1) and [Windows](https://github.com/vassilidev/evict/issues/2) are planned.
 - **APFS clones**: they are counted at full size, so the total can exceed the space actually used.
 - **Snapshots**: APFS and Time Machine snapshots aren't visible. They show up in the "Invisible" box.
+- **Search** only finds items of 1 MB or more: the scanner groups smaller files into "other items" to keep the report light.
 
 ## Roadmap
 

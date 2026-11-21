@@ -29,6 +29,32 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 #legend button.on{border-color:var(--fg);color:var(--fg)}
 #legend i{width:9px;height:9px;border-radius:3px}
 .acts{display:flex;gap:6px}
+#q{font:inherit;font-size:12.5px;width:240px;flex-shrink:0;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 10px;outline:none;transition:border-color .15s}
+#q:focus{border-color:#5b6476}
+#q::placeholder{color:#6b7383}
+.seg{display:flex;flex-shrink:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:none;color:var(--mut);padding:4px 12px}
+.seg button.on{background:#262b35;color:var(--fg)}
+
+#list{overflow:auto;margin:0 8px 8px;border-radius:8px;background:var(--gut);padding:4px 0}
+.row{display:grid;grid-template-columns:12px 10px minmax(0,1fr) minmax(60px,200px) 72px 52px 26px;align-items:center;gap:10px;height:34px;margin:0 4px;padding:0 8px 0 calc(10px + var(--d,0) * 20px);border-radius:6px;cursor:pointer;transition:background .12s,opacity .2s}
+.row:hover{background:#171b22}
+.row.dim{opacity:.25}
+.tw{display:grid;place-items:center;transition:transform .15s}
+.tw.dir::before{content:"";width:6px;height:6px;border:solid #8b93a1;border-width:0 1.5px 1.5px 0;transform:rotate(-45deg)}
+.row.open .tw{transform:rotate(90deg)}
+.dot{width:10px;height:10px;border-radius:3px}
+.rn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.rn small{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--mut);margin-left:10px}
+.rb{height:6px;border-radius:3px;background:#1a1e26;overflow:hidden}
+.rb i{display:block;height:100%;border-radius:3px}
+.rs{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.rp{text-align:right;color:var(--mut);font-variant-numeric:tabular-nums}
+.row .more{opacity:0;border:0;background:none;padding:0;color:var(--mut);font-size:16px;line-height:1}
+.row:hover .more{opacity:1}
+.lhead{padding:8px 18px;color:var(--mut);font-size:12px}
+.found{animation:found 1.8s ease-out}
+@keyframes found{0%,40%{box-shadow:inset 0 0 0 2px #fff}100%{box-shadow:inset 0 0 0 2px transparent}}
 
 #map{position:relative;overflow:hidden;background:var(--gut);margin:0 8px 8px;border-radius:8px}
 .box{position:absolute;overflow:hidden;cursor:pointer;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.12;transition:opacity .2s ease}
@@ -64,13 +90,20 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 #menu button:hover{background:#232834}
 #menu .m-note{padding:7px 10px;color:var(--mut);font-size:12px}
 #menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+#ai{left:50%;top:50%;transform:translate(-50%,-50%);z-index:15;width:min(640px,calc(100vw - 32px));max-height:min(80vh,720px);display:flex;flex-direction:column;gap:12px;padding:16px 18px}
+#ai h3{margin:0 0 3px;font-size:15px;overflow-wrap:anywhere}
+#ai code{color:var(--mut);overflow-wrap:anywhere}
+.a-body{overflow:auto;white-space:pre-wrap;line-height:1.55;color:#d7dbe3;min-height:60px}
+.a-body.wait{color:var(--mut)}
+.a-foot{display:flex;justify-content:flex-end;gap:8px}
 #toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,10px);background:var(--fg);color:#000;padding:8px 14px;border-radius:8px;opacity:0;transition:.18s;pointer-events:none;font-weight:600;z-index:20}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 #empty{padding:40px;color:var(--mut)}
 [hidden]{display:none!important}
 
-@media (max-width:760px){#stats{display:none}.bottom{flex-wrap:wrap}}
-@media (prefers-reduced-motion:reduce){.box,.ring,#tip,#toast{transition:none}}
+@media (max-width:1150px){#stats{display:none}}
+@media (max-width:760px){.bottom{flex-wrap:wrap}#q{width:150px}}
+@media (prefers-reduced-motion:reduce){.box,.ring,.row,.tw,#tip,#toast{transition:none}.found{animation:none}}
 </style>
 </head>
 <body>
@@ -78,12 +111,15 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
   <div class="top">
     <div class="brand">Evict<span>.</span></div>
     <nav id="crumbs"></nav>
+    <input id="q" type="search" placeholder="Search files and folders" autocomplete="off" spellcheck="false" aria-label="Search files and folders">
     <div id="stats"></div>
   </div>
   <div class="bottom">
+    <div class="seg" id="views"><button data-v="map">Map</button><button data-v="list">List</button></div>
     <div id="legend"></div>
     <div class="acts">
       <button id="masked" hidden></button>
+      <button id="cur-ai"></button>
       <button id="cur-finder">Show in Finder</button>
       <button id="cur-cp">Copy path</button>
       <button id="cur-rm" class="danger">Copy rm -rf</button>
@@ -91,8 +127,14 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
   </div>
 </header>
 <div id="map"></div>
+<div id="list" hidden></div>
 <div id="tip" class="pop"></div>
 <div id="menu" class="pop" hidden></div>
+<div id="ai" class="pop" role="dialog" aria-labelledby="ai-title" hidden>
+  <div><h3 id="ai-title"></h3><code id="ai-path"></code></div>
+  <div id="ai-body" class="a-body"></div>
+  <div class="a-foot"><button id="ai-copy">Copy prompt</button><button id="ai-close">Close</button></div>
+</div>
 <div id="toast"></div>
 <script>
 window.DATA = null; /* __DATA__ */
@@ -127,6 +169,7 @@ const quote = p => "'" + p.replace(/'/g, "'\\''") + "'";
 const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !/^\/Users\/[^/]+(\/Library)?$/.test(p);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
 const label = n => n[0] ?? `${nf(n[2], 0)} other items`;
+const pct = x => x * 100 < 0.1 ? '<0.1%' : nf(x * 100, 1) + '%';
 
 function catOf(n, p) {
   if (n.cat) return n.cat;
@@ -228,7 +271,13 @@ if (D) {
     }
     return s;
   }
-  const go = p => { location.hash = encodeURIComponent(p) };
+  // target: a box or row to point out once the folder is shown (a search result)
+  let flash = null;
+  const go = (p, target = null) => {
+    const h = '#' + encodeURIComponent(p);
+    flash = target;
+    if (location.hash === h) { $('q').value = ''; render(true) } else location.hash = h;
+  };
 
   let toastTimer;
   function toast(msg) {
@@ -252,6 +301,44 @@ if (D) {
   const reveal = p => app ? app.postMessage({action: 'reveal', path: p}) : copy('open -R ' + quote(p), 'Command copied: paste it in Terminal');
   const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'rm command copied');
   if (app) $('cur-rm').textContent = 'Delete this folder…';
+
+  // In the app, the prompt runs through the local Claude Code CLI when it's installed; otherwise it's copied for any AI chat
+  const claude = !!(app && window.evictClaude);
+  let langName = 'English';
+  try { langName = new Intl.DisplayNames(['en'], {type: 'language'}).of((window.evictLang || navigator.language).split('-')[0]) || langName } catch {}
+  function aiPrompt(n, p, v) {
+    let text = `I'm freeing up disk space on my Mac. What is this ${isDir(n) ? 'folder' : 'file'}?\n\nPath: ${p}\nSize on disk: ${fmt(v)}\n`;
+    if (isDir(n)) text += 'Largest items inside:\n' + [...n[2]].sort((a, b) => b[1] - a[1]).slice(0, 10)
+      .map(k => `- ${label(k)}${isDir(k) ? '/' : ''}: ${fmt(k[1])}`).join('\n') + '\n';
+    return text + `
+Please tell me:
+1. What it is, and which app, tool or part of macOS creates it.
+2. Whether it's safe to delete, and what happens if I do (lost data or settings, re-downloaded, rebuilt automatically…).
+3. The cleanest way to free this space (the app's own setting or command, if there is one), and whether it will grow back.
+
+Only explain: don't delete anything and don't run any command. Keep it short. Answer in ${langName}.`;
+  }
+  let askId = 0;
+  function ask(n, p, v) {
+    const text = aiPrompt(n, p, v);
+    if (!claude) return copy(text, 'AI prompt copied: paste it into Claude, ChatGPT…');
+    $('ai-title').textContent = `What is “${label(n)}”?`;
+    $('ai-path').textContent = p;
+    $('ai-body').textContent = 'Asking Claude… this usually takes 10 to 30 seconds.';
+    $('ai-body').className = 'a-body wait';
+    $('ai-copy').onclick = () => copy(text, 'Prompt copied');
+    $('ai').hidden = false;
+    app.postMessage({action: 'ask', id: ++askId, prompt: text});
+  }
+  const closeAI = () => { $('ai').hidden = true };
+  $('ai-close').onclick = closeAI;
+  // Called by the macOS app with Claude's answer
+  window.evictAnswer = (id, answer, ok) => {
+    if (id !== askId || $('ai').hidden) return;
+    $('ai-body').textContent = ok ? answer.trim() : `Claude couldn't answer:\n\n${answer.trim()}`;
+    $('ai-body').className = 'a-body';
+  };
+  $('cur-ai').textContent = claude ? 'Ask Claude' : 'Copy AI prompt';
 
   // Called by the macOS app once a path has been deleted (freed = true) or moved to the Trash
   window.evictRemoved = (path, freed) => {
@@ -323,14 +410,15 @@ if (D) {
   function openMenu(it, e) {
     const items = [];
     if (isDir(it.n)) items.push(menuItem('Open', () => go(it.p)));
-    items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem('Hide from map', () => setMask(it.p, true)), el('hr'));
+    items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem(claude ? 'Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(it.n, it.p, it.v)), menuItem('Hide', () => setMask(it.p, true)), el('hr'));
     items.push(canRm(it.p) ? menuItem(app ? 'Delete…' : 'Copy rm -rf command', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Protected path: deletion disabled'));
     showMenu(label(it.n), fmt(it.v), items, e.clientX - 14, e.clientY - 14);
   }
   const closeMenu = () => { $('menu').hidden = true };
 
+  const itemsOf = (nodes, p) => nodes.map(n => { const np = kidPath(p, n); return {n, p: np, v: total(n, np)} }).filter(it => it.v > 0).sort((a, b) => b.v - a.v);
   function layout(nodes, p, x, y, w, h, depth, parent) {
-    const items = nodes.map(n => { const np = kidPath(p, n); return {n, p: np, v: total(n, np)} }).filter(it => it.v > 0).sort((a, b) => b.v - a.v);
+    const items = itemsOf(nodes, p);
     const max = items[0]?.v || 1;
     for (const [it, bx, by, bw, bh] of squarify(items, x, y, w, h)) {
       const x0 = Math.round(bx), y0 = Math.round(by), x1 = Math.round(bx + bw), y1 = Math.round(by + bh);
@@ -396,6 +484,58 @@ if (D) {
   }
   function applyFocus() {
     for (const b of $('map').children) b.classList.toggle('dim', !!focusCat && !b.classList.contains('group') && b.dataset.c !== focusCat);
+    for (const r of $('list').querySelectorAll('.row')) { const it = rows[r.dataset.i]; r.classList.toggle('dim', !!focusCat && !(mix(it.n, it.p)[focusCat] > 0)) }
+  }
+
+  // List view: a size-sorted tree of the current folder, folders expand in place
+  let view = 'map', rows = [];
+  try { if (localStorage.getItem('evict.view') === 'list') view = 'list' } catch {}
+  const expanded = new Set();
+  function rowEl(it, depth, base, sub, barBase = base) {
+    const r = el('div', 'row'), dot = el('i', 'dot'), bar = el('span', 'rb'), fill = el('i'), name = el('span', 'rn', label(it.n));
+    const cat = it.n.cat || (isDir(it.n) ? dominant(it.n, it.p) : catOf(it.n, it.p));
+    r.dataset.i = rows.push(it) - 1;
+    r.style.setProperty('--d', depth);
+    if (expanded.has(it.p) && !sub) r.classList.add('open');
+    dot.style.background = fill.style.background = CATS[cat][1];
+    fill.style.width = Math.max(0.5, it.v / barBase * 100) + '%';
+    bar.append(fill);
+    if (sub) name.append(el('small', '', sub));
+    r.append(el('span', isDir(it.n) && it.p && !sub ? 'tw dir' : 'tw'), dot, name, bar, el('span', 'rs', fmt(it.v)), el('span', 'rp', pct(it.v / base)), it.p ? el('button', 'more', '⋯') : el('span'));
+    return r;
+  }
+  function renderList() {
+    const frag = document.createDocumentFragment();
+    const add = (nodes, p, depth) => {
+      for (const it of itemsOf(nodes, p)) {
+        frag.append(rowEl(it, depth, viewSize));
+        if (it.p && isDir(it.n) && expanded.has(it.p)) add(it.n[2], it.p, depth + 1);
+      }
+    };
+    rows = [];
+    add([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0);
+    $('list').replaceChildren(frag);
+  }
+  // Searches the whole scan, hidden folders excluded; the scanner groups files under 1 MB, so those can't be found
+  function renderResults(q) {
+    const needle = q.toLowerCase(), byPath = needle.includes('/'), found = [];
+    const walk = (n, p) => {
+      for (const k of n[2]) {
+        const kp = kidPath(p, k), v = kp ? total(k, kp) : 0;
+        if (!v) continue;
+        if ((byPath ? kp : k[0]).toLowerCase().includes(needle)) found.push({n: k, p: kp, v});
+        if (isDir(k)) walk(k, kp);
+      }
+    };
+    walk(root, root[0]);
+    found.sort((a, b) => b.v - a.v);
+    const shown = found.slice(0, 300), base = total(root, root[0]), frag = document.createDocumentFragment();
+    frag.append(el('div', 'lhead', found.length
+      ? `${nf(found.length, 0)} result${found.length > 1 ? 's' : ''} for “${q}”${found.length > shown.length ? `, the ${shown.length} largest shown` : ''}`
+      : `Nothing named “${q}”. Files under 1 MB are grouped by the scanner, so they can't be searched.`));
+    rows = [];
+    for (const it of shown) frag.append(rowEl(it, 0, base, it.p.slice(0, it.p.lastIndexOf('/')) || '/', shown[0].v));
+    $('list').replaceChildren(frag);
   }
 
   function render(fade) {
@@ -412,16 +552,31 @@ if (D) {
     $('cur-finder').onclick = () => reveal(curPath);
     $('cur-rm').hidden = !canRm(curPath);
     $('cur-rm').onclick = () => remove(curPath, cur[1]);
+    $('cur-ai').hidden = stack.length === 1;
+    $('cur-ai').onclick = () => ask(cur, curPath, total(cur, curPath));
 
     renderLegend();  // before layout: the legend height decides the map height
-    const map = $('map');
+    const q = $('q').value.trim(), list = !!q || view === 'list', map = $('map');
+    for (const b of $('views').children) b.classList.toggle('on', !q && b.dataset.v === view);
+    map.hidden = list; $('list').hidden = !list;
     hovered = undefined; hover(null);
     map.replaceChildren(); boxes = [];
-    lastSize = map.clientWidth + 'x' + map.clientHeight;
-    layout([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0, 0, map.clientWidth, map.clientHeight, 0);
-    map.append(ring2, ring);
-    if (fade && !matchMedia('(prefers-reduced-motion: reduce)').matches) map.animate([{opacity: 0}, {opacity: 1}], {duration: 180, easing: 'ease-out'});
+    if (q) renderResults(q);
+    else if (list) renderList();
+    else {
+      lastSize = map.clientWidth + 'x' + map.clientHeight;
+      layout([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0, 0, map.clientWidth, map.clientHeight, 0);
+      map.append(ring2, ring);
+    }
+    const shown = list ? $('list') : map;
+    if (fade && !matchMedia('(prefers-reduced-motion: reduce)').matches) shown.animate([{opacity: 0}, {opacity: 1}], {duration: 180, easing: 'ease-out'});
     applyFocus();
+    if (flash) {
+      const i = (list ? rows : boxes).findIndex(it => it.p === flash);
+      const node = i >= 0 && shown.querySelector(`[data-i="${i}"]`);
+      if (node) { node.classList.add('found'); if (list) node.scrollIntoView({block: 'center'}) }
+      flash = null;
+    }
   }
 
   const boxAt = e => { const b = e.target.closest('.box'); return b ? boxes[b.dataset.i] : null };
@@ -443,20 +598,57 @@ if (D) {
     isDir(it.n) ? go(it.p) : openMenu(it, e);
   });
   $('map').addEventListener('contextmenu', e => { const it = boxAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
+
+  const rowAt = e => { const r = e.target.closest('.row'); return r ? rows[r.dataset.i] : null };
+  const searching = () => !!$('q').value.trim();
+  // A row: folders expand in place (double-click opens them), files show their menu; a search result jumps to its place
+  $('list').addEventListener('click', e => {
+    if (!$('menu').hidden) return closeMenu();
+    const it = rowAt(e);
+    if (!it?.p) return;
+    if (e.target.closest('.more')) return openMenu(it, e);
+    if (searching()) return isDir(it.n) ? go(it.p) : go(it.p.slice(0, it.p.lastIndexOf('/')) || '/', it.p);
+    if (!isDir(it.n)) return openMenu(it, e);
+    if (e.detail > 1) return go(it.p);
+    expanded.has(it.p) ? expanded.delete(it.p) : expanded.add(it.p);
+    const top = $('list').scrollTop;
+    renderList(); applyFocus();
+    $('list').scrollTop = top;
+  });
+  $('list').addEventListener('contextmenu', e => { const it = rowAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
+  for (const b of $('views').children) b.onclick = () => {
+    view = b.dataset.v;
+    try { localStorage.setItem('evict.view', view) } catch {}
+    $('q').value = '';
+    render(true);
+  };
+  let searchTimer;
+  $('q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => render(false), 120) });
+
   $('masked').onclick = e => {
     const r = e.currentTarget.getBoundingClientRect();
-    showMenu('Hidden from the map', 'Click to show again', [...[...masked].map(p => menuItem(p, () => setMask(p, false))), el('hr'), menuItem('Show all', () => setMask(null, false))], r.left - 14, r.bottom - 6);
+    showMenu('Hidden', 'Click to show again', [...[...masked].map(p => menuItem(p, () => setMask(p, false))), el('hr'), menuItem('Show all', () => setMask(null, false))], r.left - 14, r.bottom - 6);
   };
-  document.addEventListener('mousedown', e => { if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target)) closeMenu() });
+  document.addEventListener('mousedown', e => {
+    if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target) && !$('list').contains(e.target)) closeMenu();
+    if (!$('ai').hidden && !$('ai').contains(e.target)) closeAI();
+  });
   addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); $('q').focus(); $('q').select(); return }
     if (e.metaKey || e.ctrlKey) return;
-    if (e.key === 'Escape' && !$('menu').hidden) closeMenu();
+    if (e.key === 'Escape' && !$('ai').hidden) return closeAI();
+    if (e.target === $('q')) {
+      if (e.key === 'Escape') { $('q').value = ''; $('q').blur(); render(false) }
+      return;
+    }
+    if (e.key === '/') { e.preventDefault(); $('q').focus() }
+    else if (e.key === 'Escape' && !$('menu').hidden) closeMenu();
     else if ((e.key === 'Backspace' || e.key === 'Escape') && stack.length > 1) { e.preventDefault(); go(pathOf(stack.slice(0, -1))) }
   });
-  addEventListener('hashchange', () => render(true));
+  addEventListener('hashchange', () => { $('q').value = ''; render(true) });
   let raf, lastSize = '';
   new ResizeObserver(() => {
-    if ($('map').clientWidth + 'x' + $('map').clientHeight === lastSize) return;
+    if ($('map').hidden || $('map').clientWidth + 'x' + $('map').clientHeight === lastSize) return;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(() => render(false));
   }).observe($('map'));
   render(true);
