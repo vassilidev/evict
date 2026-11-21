@@ -48,6 +48,7 @@
   - 🟪 **media**, 🟦 **apps**, 🟩 **data**, ⬛ **system**
 
   Click a category to highlight it.
+- **Select many, delete once**: checkboxes in the list and in search results, `⌘`-click on the map, `Shift`-click for a range, **Select all** on a search (`.mov`, `node_modules`…). The selection stays while you search and browse; a bar shows its total size, lets you review it, show it in Finder or delete it all at once.
 - **Built-in cleanup** (app): move to Trash, delete permanently or empty the Trash. The administrator password is only asked for when needed, and system paths are protected.
 - **Show in Finder** for any file or folder.
 - **Hide a folder** (`System`, for example) to give the rest more room. The choice is remembered across scans.
@@ -102,6 +103,8 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | Click a file · right-click · `⋯` | Menu: open, show in Finder, copy path, ask AI, hide, delete |
 | **Map** / **List** | Switch views (remembered) |
 | `⌘F` or `/` | Search files and folders · `Esc` clears |
+| Checkbox · `⌘`-click · `Shift`-click · `⌘A` | Select · add to the selection · select a range · select every row shown |
+| `Esc` with a selection | Clear the selection |
 | `.mov .mp4` in the search field | Filter by extension |
 | **Trash** / **Downloads** | Open them · **Empty Trash…** when you're in the Trash |
 | **Ask Claude** / **Copy AI prompt** | Ask what the current folder is |
@@ -139,6 +142,7 @@ index.html    interface (plain HTML/CSS/JS) ←  data injected into the page
 app/          macOS app (SwiftUI + WKWebView, JS ↔ native bridge, self-updater)
 evict         CLI script: scan + page + open in the browser
 build.sh      builds a universal Evict.app (Apple Silicon + Intel); "./build.sh dmg" makes the DMG
+minify.py     minifies the page shipped in the app (esbuild), the repo keeps the readable source
 install.sh    builds and installs Evict.app
 test.sh       checks the scanner's total against `du` on a test folder
 docs/         website (GitHub Pages) and README images
@@ -148,7 +152,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.5.0 && git push origin v1.5.0
+git tag v1.6.0 && git push origin v1.6.0
 ```
 
 ## Known limitations

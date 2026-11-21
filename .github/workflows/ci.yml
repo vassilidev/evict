@@ -30,6 +30,9 @@ jobs:
             lipo -archs ".build/Evict.app/Contents/MacOS/$bin" | grep -q 'x86_64 arm64'
           done
           codesign --verify --deep --strict .build/Evict.app
+          page=.build/Evict.app/Contents/Resources/index.html
+          grep -q 'window.DATA = null; /\* __DATA__ \*/' "$page"
+          test "$(wc -c < "$page")" -lt "$(wc -c < index.html)"  # the minifier really ran
 
       - uses: actions/upload-artifact@v4
         with:

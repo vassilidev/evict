@@ -45,10 +45,22 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 .seg button.on{background:#262b35;color:var(--fg)}
 
 #list{overflow:auto;margin:0 8px 8px;border-radius:8px;background:var(--gut);padding:4px 0}
-.row{display:grid;grid-template-columns:12px 10px minmax(0,1fr) minmax(60px,200px) 72px 52px 26px;align-items:center;gap:10px;height:34px;margin:0 4px;padding:0 8px 0 calc(10px + var(--d,0) * 20px);border-radius:6px;cursor:pointer;transition:background .12s,opacity .2s}
+.row{display:grid;grid-template-columns:16px auto 10px minmax(0,1fr) minmax(60px,200px) 72px 52px 26px;align-items:center;gap:10px;height:34px;margin:0 4px;padding:0 8px 0 10px;border-radius:6px;cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .12s,opacity .2s}
 .row:hover{background:#171b22}
 .row.dim{opacity:.25}
-.tw{display:grid;place-items:center;transition:transform .15s}
+.tw{display:grid;place-items:center;width:12px;margin-left:calc(var(--d,0) * 20px);transition:transform .15s}
+.ck{width:15px;height:15px;border-radius:4px;border:1.5px solid #3a404c;display:grid;place-items:center;transition:border-color .12s,background .12s}
+.row:hover .ck{border-color:#8b93a1}
+.row.sel{background:#18223a}
+.row.sel .ck{background:#3d7fe6;border-color:#3d7fe6}
+.row.sel .ck::after{content:"";width:7px;height:4px;border:solid #fff;border-width:0 0 2px 2px;transform:translateY(-1px) rotate(-45deg)}
+.box.sel::after{content:"";position:absolute;inset:0;z-index:4;box-shadow:inset 0 0 0 3px #3d7fe6;background:rgba(61,127,230,.22);pointer-events:none}
+.selall{margin-left:10px;padding:1px 8px;font-size:11.5px}
+#selbar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:12;display:flex;align-items:center;gap:8px;padding:8px 8px 8px 8px;background:rgba(21,24,30,.97);backdrop-filter:blur(10px);border:1px solid #3a4150;border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);animation:rise .18s ease-out}
+@keyframes rise{from{transform:translate(-50%,10px);opacity:0}}
+#sel-info{border:0;background:none;font-weight:650;font-size:13px}
+#sel-info:hover{background:#232834}
+#selbar:not([hidden])~#toast{bottom:80px}
 .tw.dir::before{content:"";width:6px;height:6px;border:solid #8b93a1;border-width:0 1.5px 1.5px 0;transform:rotate(-45deg)}
 .row.open .tw{transform:rotate(90deg)}
 .dot{width:10px;height:10px;border-radius:3px}
@@ -89,7 +101,7 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 #tip .t-meta i{width:9px;height:9px;border-radius:3px}
 #tip code{color:var(--mut);overflow-wrap:anywhere}
 .hint{color:#6b7383;font-size:11px;padding-top:4px;border-top:1px solid var(--line);margin-top:2px}
-#menu{padding:5px;min-width:240px}
+#menu{padding:5px;min-width:240px;max-height:70vh;overflow:auto}
 #menu .m-head{padding:7px 10px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
 #menu .m-head b{display:block;overflow-wrap:anywhere}
 #menu .m-head span{color:var(--mut);font-size:12px}
@@ -142,7 +154,7 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 
 @media (max-width:1150px){#stats{display:none}}
 @media (max-width:760px){.bottom{flex-wrap:wrap}#q{width:150px}}
-@media (prefers-reduced-motion:reduce){.box,.ring,.row,.tw,#tip,#toast{transition:none}.found,#ai,.sk{animation:none}}
+@media (prefers-reduced-motion:reduce){.box,.ring,.row,.tw,#tip,#toast{transition:none}.found,#ai,.sk,#selbar{animation:none}}
 </style>
 </head>
 <body>
@@ -182,6 +194,12 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
   <div id="ai-body" class="md"></div>
   <div class="a-foot"><span id="ai-status"></span><button id="ai-copy-md" hidden>Copy answer</button><button id="ai-copy">Copy prompt</button></div>
 </aside>
+<div id="selbar" hidden>
+  <button id="sel-info" title="Review the selection"></button>
+  <button id="sel-clear">Clear</button>
+  <button id="sel-finder">Show in Finder</button>
+  <button id="sel-rm" class="danger"></button>
+</div>
 <div id="toast"></div>
 <script>
 window.DATA = null; /* __DATA__ */
@@ -533,19 +551,26 @@ ${rules}`;
   $('cur-wins').textContent = claude ? '✦ Quick wins' : 'Copy quick wins prompt';
   $('cur-wins').onclick = quickWins;
 
-  // Called by the macOS app once a path has been deleted (freed = true) or moved to the Trash
-  window.evictRemoved = (path, freed) => {
+  // Called by the macOS app with the paths it deleted (freed = true) or moved to the Trash
+  function applyRemoved(path, freed) {
     const cut = path.lastIndexOf('/'), parentPath = path.slice(0, cut) || '/', name = path.slice(cut + 1);
     const s = resolve(parentPath), parent = s.at(-1), k = parent[2].findIndex(n => n[0] === name);
-    if (pathOf(s) !== parentPath || k < 0) return;
+    if (pathOf(s) !== parentPath || k < 0) return 0;
     const [node] = parent[2].splice(k, 1), size = node[1];
     for (const n of s) n[1] -= size;
     const t = trash();
     if (!freed && t && !path.startsWith(t.p + '/')) { t.s.at(-1)[2].push(node); for (const n of t.s) n[1] += size }
+    return size;
+  }
+  window.evictRemoved = (paths, freed) => {
+    let size = 0;
+    for (const p of paths) size += applyRemoved(p, freed);
+    for (const q of selected.keys()) if (paths.some(p => q === p || q.startsWith(p + '/'))) selected.delete(q);
     resetMemo();
     if (freed) { D.free += size; stats() }
-    toast(freed ? `${fmt(size)} freed` : `${fmt(size)} moved to the Trash`);
-    if (curPath === path || curPath.startsWith(path + '/')) go(parentPath); else render(false);
+    toast(`${paths.length > 1 ? `${nf(paths.length, 0)} items: ` : ''}${fmt(size)} ${freed ? 'freed' : 'moved to the Trash'}`);
+    const gone = paths.find(p => curPath === p || curPath.startsWith(p + '/'));
+    if (gone) go(gone.slice(0, gone.lastIndexOf('/')) || '/'); else render(false);
   };
 
   // Called by the macOS app once the Trash has been emptied
@@ -558,7 +583,7 @@ ${rules}`;
     resetMemo();
     D.free += size; stats();
     toast(`${fmt(size)} freed`);
-    render(false);
+    go(root[0]);
   };
 
   // Places to check on any disk: the Trash, where "Move to Trash" sends things, and every Downloads folder
@@ -635,7 +660,7 @@ ${rules}`;
     dot.style.background = CATS[it.cat][1];
     meta.append(dot, `${fmt(it.v)} · ${nf(it.v / viewSize * 100, 1)}% · ${CATS[it.cat][0]}`);
     tip.replaceChildren(el('div', 't-name', it.title || label(it.n)), meta);
-    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions'));
+    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', (isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions') + (canRm(it.p) ? ' · ⌘-click: select' : '')));
     tipW = tip.offsetWidth; tipH = tip.offsetHeight;
     tip.classList.add('on');
   }
@@ -664,6 +689,7 @@ ${rules}`;
   function openMenu(it, e) {
     const items = [];
     if (isDir(it.n)) items.push(menuItem('Open', () => go(it.p)));
+    if (selectable(it)) items.push(menuItem(selected.has(it.p) ? 'Deselect' : 'Select', () => { pick(it); syncSel() }));
     items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem(claude ? '✦ Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(it.n, it.p, it.v)), menuItem('Hide', () => setMask(it.p, true)), el('hr'));
     items.push(canRm(it.p) ? menuItem(app ? 'Delete…' : 'Copy rm -rf command', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Protected path: deletion disabled'));
     showMenu(label(it.n), fmt(it.v), items, e.clientX - 14, e.clientY - 14);
@@ -755,7 +781,7 @@ ${rules}`;
     fill.style.width = Math.max(0.5, it.v / barBase * 100) + '%';
     bar.append(fill);
     if (sub) name.append(el('small', '', sub));
-    r.append(el('span', isDir(it.n) && it.p && !sub ? 'tw dir' : 'tw'), dot, name, bar, el('span', 'rs', fmt(it.v)), el('span', 'rp', pct(it.v / base)), it.p ? el('button', 'more', '⋯') : el('span'));
+    r.append(el('span', selectable(it) ? 'ck' : ''), el('span', isDir(it.n) && it.p && !sub ? 'tw dir' : 'tw'), dot, name, bar, el('span', 'rs', fmt(it.v)), el('span', 'rp', pct(it.v / base)), it.p ? el('button', 'more', '⋯') : el('span'));
     return r;
   }
   function renderList() {
@@ -766,7 +792,7 @@ ${rules}`;
         if (it.p && isDir(it.n) && expanded.has(it.p)) add(it.n[2], it.p, depth + 1);
       }
     };
-    rows = [];
+    rows = []; lastPick = null;
     add([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0);
     $('list').replaceChildren(frag);
   }
@@ -794,7 +820,12 @@ ${rules}`;
     frag.append(el('div', 'lhead', found.length
       ? `${nf(found.length, 0)} result${found.length > 1 ? 's' : ''} for “${q}” · ${fmt(sum)}${found.length > shown.length ? `, the ${shown.length} largest shown` : ''}`
       : `Nothing matches “${q}”. Files under 1 MB are grouped by the scanner, so they can't be searched.`));
-    rows = [];
+    rows = []; lastPick = null;
+    if (shown.some(selectable)) {
+      const all = el('button', 'selall', 'Select all');
+      all.onclick = () => { for (const it of rows) pick(it, true); syncSel() };
+      frag.firstChild.append(all);
+    }
     for (const it of shown) frag.append(rowEl(it, 0, base, it.p.slice(0, it.p.lastIndexOf('/')) || '/', shown[0].v));
     $('list').replaceChildren(frag);
   }
@@ -834,6 +865,41 @@ ${rules}`;
     box.style.transform = `translate(${Math.max(8, Math.min(r.left, innerWidth - box.offsetWidth - 8))}px,${r.bottom + 6}px)`;
   }
 
+  // Multi-selection: it survives searches, navigation and view changes until it's deleted or cleared
+  const selected = new Map();
+  let lastPick = null;
+  const selectable = it => !!it?.p && canRm(it.p);
+  function pick(it, on = !selected.has(it.p)) {
+    if (selectable(it)) on ? selected.set(it.p, it.v) : selected.delete(it.p);
+  }
+  // A file inside a selected folder goes with it: counted and deleted once
+  function picks() {
+    const all = [...selected.keys()];
+    return [...selected].filter(([p]) => !all.some(q => p.startsWith(q + '/')));
+  }
+  function syncSel() {
+    for (const r of $('list').querySelectorAll('.row')) r.classList.toggle('sel', selected.has(rows[r.dataset.i].p));
+    for (const b of $('map').querySelectorAll('.box')) b.classList.toggle('sel', selected.has(boxes[b.dataset.i].p));
+    $('selbar').hidden = !selected.size;
+    if (!selected.size) return;
+    const list = picks();
+    $('sel-info').textContent = `${nf(list.length, 0)} selected · ${fmt(list.reduce((sum, [, v]) => sum + v, 0))}`;
+  }
+  $('sel-clear').onclick = () => { selected.clear(); syncSel() };
+  $('sel-info').onclick = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    showMenu('Selection', 'Click an item to deselect it', [...selected].sort((a, b) => b[1] - a[1])
+      .map(([p, v]) => menuItem(`${tilde(p)} · ${fmt(v)}`, () => { selected.delete(p); syncSel() })), r.left - 14, r.top - 14);
+  };
+  $('sel-finder').onclick = () => app ? app.postMessage({action: 'reveal', paths: picks().map(([p]) => p)})
+    : copy('open -R ' + picks().map(([p]) => quote(p)).join(' '), 'Command copied: paste it in Terminal');
+  $('sel-rm').textContent = app ? 'Delete…' : 'Copy rm -rf';
+  $('sel-rm').onclick = () => {
+    const list = picks();
+    if (app) app.postMessage({action: 'deleteMany', items: list});
+    else copy('rm -rf ' + list.map(([p]) => quote(p)).join(' '), `rm command copied for ${nf(list.length, 0)} item${list.length > 1 ? 's' : ''}`);
+  };
+
   function render(fade) {
     closeMenu();
     stack = resolve(decodeURIComponent(location.hash.slice(1)) || root[0]);
@@ -870,6 +936,7 @@ ${rules}`;
     const shown = list ? $('list') : map;
     if (fade && !matchMedia('(prefers-reduced-motion: reduce)').matches) shown.animate([{opacity: 0}, {opacity: 1}], {duration: 180, easing: 'ease-out'});
     applyFocus();
+    syncSel();
     if (flash) {
       const i = (list ? rows : boxes).findIndex(it => it.p === flash);
       const node = i >= 0 && shown.querySelector(`[data-i="${i}"]`);
@@ -894,6 +961,7 @@ ${rules}`;
     const it = boxAt(e);
     if (!$('menu').hidden) return closeMenu();
     if (!it || !it.p) return;
+    if (e.metaKey || e.ctrlKey) { pick(it); return syncSel() }
     isDir(it.n) ? go(it.p) : openMenu(it, e);
   });
   $('map').addEventListener('contextmenu', e => { const it = boxAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
@@ -903,15 +971,22 @@ ${rules}`;
   // A row: folders expand in place (double-click opens them), files show their menu; a search result jumps to its place
   $('list').addEventListener('click', e => {
     if (!$('menu').hidden) return closeMenu();
-    const it = rowAt(e);
+    const r = e.target.closest('.row'), it = rowAt(e);
     if (!it?.p) return;
+    if (e.target.closest('.ck') || e.metaKey || e.ctrlKey || e.shiftKey) {
+      const i = +r.dataset.i, on = !selected.has(it.p);
+      if (e.shiftKey && lastPick !== null) for (let j = Math.min(i, lastPick); j <= Math.max(i, lastPick); j++) pick(rows[j], on);
+      else pick(it, on);
+      lastPick = i;
+      return syncSel();
+    }
     if (e.target.closest('.more')) return openMenu(it, e);
     if (searching()) return isDir(it.n) ? go(it.p) : go(it.p.slice(0, it.p.lastIndexOf('/')) || '/', it.p);
     if (!isDir(it.n)) return openMenu(it, e);
     if (e.detail > 1) return go(it.p);
     expanded.has(it.p) ? expanded.delete(it.p) : expanded.add(it.p);
     const top = $('list').scrollTop;
-    renderList(); applyFocus();
+    renderList(); applyFocus(); syncSel();
     $('list').scrollTop = top;
   });
   $('list').addEventListener('contextmenu', e => { const it = rowAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
@@ -931,10 +1006,15 @@ ${rules}`;
     showMenu('Hidden', 'Click to show again', [...[...masked].map(p => menuItem(p, () => setMask(p, false))), el('hr'), menuItem('Show all', () => setMask(null, false))], r.left - 14, r.bottom - 6);
   };
   document.addEventListener('mousedown', e => {
-    if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target) && !$('list').contains(e.target)) closeMenu();
+    if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target) && !$('list').contains(e.target) && e.target !== $('sel-info')) closeMenu();
   });
   addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); $('q').focus(); $('q').select(); return }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'a' && e.target !== $('q') && !$('list').hidden) {
+      e.preventDefault();
+      for (const it of rows) pick(it, true);
+      return syncSel();
+    }
     if (e.metaKey || e.ctrlKey) return;
     if (e.key === 'Escape' && !$('ai').hidden) return closeAI();
     if (e.target === $('q')) {
@@ -943,6 +1023,7 @@ ${rules}`;
     }
     if (e.key === '/') { e.preventDefault(); $('q').focus() }
     else if (e.key === 'Escape' && !$('menu').hidden) closeMenu();
+    else if (e.key === 'Escape' && selected.size) { selected.clear(); syncSel() }
     else if ((e.key === 'Backspace' || e.key === 'Escape') && stack.length > 1) { e.preventDefault(); go(pathOf(stack.slice(0, -1))) }
   });
   addEventListener('hashchange', () => { $('q').value = ''; render(true) });

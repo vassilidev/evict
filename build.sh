@@ -16,7 +16,12 @@ for arch in arm64 x86_64; do
 done
 lipo -create -output "$app/Contents/MacOS/Evict" .build/tmp/Evict-arm64 .build/tmp/Evict-x86_64
 cp app/Info.plist "$app/Contents/"
-cp index.html app/AppIcon.icns "$app/Contents/Resources/"
+cp app/AppIcon.icns "$app/Contents/Resources/"
+echo "→ Minifying the page"
+python3 minify.py index.html "$app/Contents/Resources/index.html" 2>/dev/null || {
+  echo "  minifier unavailable (needs Node): readable page copied as is"
+  cp index.html "$app/Contents/Resources/"
+}
 
 identity=${EVICT_SIGN_IDENTITY:-$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application/ {print $2; exit}')}
 if [ -n "$identity" ]; then

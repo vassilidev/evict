@@ -212,23 +212,52 @@ final class Model: ObservableObject {
 
     static let trashPath = (NSHomeDirectory() as NSString).appendingPathComponent(".Trash")
 
-    func confirmDelete(path: String, size: Int64) {
-        guard Model.canRemove(path) else { return }
-        let inTrash = path.hasPrefix(Model.trashPath + "/")
+    // One or many items: everything goes to the Trash, or everything is deleted for good (items already in the Trash always are)
+    func confirmDelete(_ items: [(path: String, size: Int64)]) {
+        let items = items.filter { Model.canRemove($0.path) }
+        guard let first = items.first else { return }
+        let inTrash = { (path: String) in path.hasPrefix(Model.trashPath + "/") }
+        let allInTrash = items.allSatisfy { inTrash($0.path) }, total = items.reduce(0) { $0 + $1.size }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Delete “\((path as NSString).lastPathComponent)”?"
-        alert.informativeText = "\(Model.bytes(size)) · \(path)\n\n" + (inTrash
-            ? "It’s already in the Trash: it will be deleted permanently."
-            : "The Trash keeps it recoverable, but the space is only freed once the Trash is emptied.")
-        if !inTrash { alert.addButton(withTitle: "Move to Trash") }
+        if items.count == 1 {
+            alert.messageText = "Delete “\((first.path as NSString).lastPathComponent)”?"
+            alert.informativeText = "\(Model.bytes(total)) · \(first.path)\n\n"
+        } else {
+            let names = items.prefix(8).map { "• " + ($0.path as NSString).lastPathComponent }.joined(separator: "\n")
+            alert.messageText = "Delete \(items.count) items?"
+            alert.informativeText = "\(Model.bytes(total)) in total\n\n\(names)\(items.count > 8 ? "\n• and \(items.count - 8) more" : "")\n\n"
+        }
+        alert.informativeText += allInTrash ? "Already in the Trash: deleted permanently."
+            : "The Trash keeps \(items.count > 1 ? "them" : "it") recoverable, but the space is only freed once the Trash is emptied."
+        if !allInTrash { alert.addButton(withTitle: "Move to Trash") }
         alert.addButton(withTitle: "Delete Permanently").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
-        switch (alert.runModal(), inTrash) {
-        case (.alertFirstButtonReturn, false): trash(path)
-        case (.alertFirstButtonReturn, true), (.alertSecondButtonReturn, false): delete(path)
-        default: break
+        let permanent: Bool
+        switch (alert.runModal(), allInTrash) {
+        case (.alertFirstButtonReturn, false): permanent = false
+        case (.alertFirstButtonReturn, true), (.alertSecondButtonReturn, false): permanent = true
+        default: return
         }
+        var trashed: [String] = [], deleted: [String] = [], failed: [String] = [], reason = ""
+        for item in items {
+            let url = URL(fileURLWithPath: item.path)
+            do {
+                if permanent || inTrash(item.path) {
+                    try FileManager.default.removeItem(at: url)
+                    deleted.append(item.path)
+                } else {
+                    try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+                    trashed.append(item.path)
+                }
+            } catch {
+                failed.append(item.path)
+                reason = error.localizedDescription
+            }
+        }
+        removed(trashed, freed: false)
+        removed(deleted, freed: true)
+        if !failed.isEmpty { offerAdmin(failed, reason: reason) }
     }
 
     // Empties the user's Trash item by item; the page can only ask for this exact folder
@@ -251,34 +280,16 @@ final class Model: ObservableObject {
         webView?.evaluateJavaScript("evictEmptied(\(arg))")
     }
 
-    private func trash(_ path: String) {
-        do {
-            try FileManager.default.trashItem(at: URL(fileURLWithPath: path), resultingItemURL: nil)
-            removed(path, freed: false)
-        } catch {
-            offerAdmin(path, reason: error.localizedDescription)
-        }
-    }
-
-    private func delete(_ path: String) {
-        do {
-            try FileManager.default.removeItem(atPath: path)
-            removed(path, freed: true)
-        } catch {
-            offerAdmin(path, reason: error.localizedDescription)
-        }
-    }
-
     // Files owned by root or another user: retry with the native administrator password prompt
-    private func offerAdmin(_ path: String, reason: String) {
+    private func offerAdmin(_ paths: [String], reason: String) {
         let alert = NSAlert()
         alert.messageText = "Permission denied"
-        alert.informativeText = "\(reason)\n\nDelete permanently using an administrator password?"
+        alert.informativeText = "\(reason)\n\nDelete \(paths.count > 1 ? "these \(paths.count) items" : "it") permanently using an administrator password?"
         alert.addButton(withTitle: "Delete as Administrator").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let literal = path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let script = NSAppleScript(source: "do shell script \"/bin/rm -rf -- \" & quoted form of \"\(literal)\" with administrator privileges")
+        let quoted = paths.map { "quoted form of \"" + $0.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\"" }
+        let script = NSAppleScript(source: "do shell script \"/bin/rm -rf -- \" & " + quoted.joined(separator: " & \" \" & ") + " with administrator privileges")
         var error: NSDictionary?
         script?.executeAndReturnError(&error)
         if let error {
@@ -289,11 +300,11 @@ final class Model: ObservableObject {
             fail.runModal()
             return
         }
-        removed(path, freed: true)
+        removed(paths, freed: true)
     }
 
-    private func removed(_ path: String, freed: Bool) {
-        guard let arg = try? String(data: JSONEncoder().encode(path), encoding: .utf8) else { return }
+    private func removed(_ paths: [String], freed: Bool) {
+        guard !paths.isEmpty, let arg = try? String(data: JSONEncoder().encode(paths), encoding: .utf8) else { return }
         webView?.evaluateJavaScript("evictRemoved(\(arg), \(freed))")
     }
 
@@ -494,11 +505,16 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
             case "reveal":
-                guard let path = body["path"] as? String else { return }
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                let paths = body["paths"] as? [String] ?? [body["path"] as? String].compactMap { $0 }
+                if !paths.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(paths.map { URL(fileURLWithPath: $0) }) }
             case "delete":
                 guard let path = body["path"] as? String else { return }
-                model.confirmDelete(path: path, size: (body["size"] as? NSNumber)?.int64Value ?? 0)
+                model.confirmDelete([(path, (body["size"] as? NSNumber)?.int64Value ?? 0)])
+            case "deleteMany":
+                guard let items = body["items"] as? [[Any]] else { return }
+                model.confirmDelete(items.compactMap { item in
+                    (item.first as? String).map { ($0, (item.last as? NSNumber)?.int64Value ?? 0) }
+                })
             case "emptyTrash":
                 guard let path = body["path"] as? String else { return }
                 model.confirmEmptyTrash(path: path, size: (body["size"] as? NSNumber)?.int64Value ?? 0)
