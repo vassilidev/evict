@@ -41,7 +41,8 @@ typedef struct Dir {
     _Atomic int refs;
 } Dir;
 
-typedef struct { Node *node; Dir *parent; } Job;
+// t1/t2: live counters of the job's ancestors on the first two levels, t3 under the home folder (-1: untracked)
+typedef struct { Node *node; Dir *parent; int t1, t2, t3, depth; } Job;
 typedef struct { Job *v; size_t n, cap; } Stack;
 
 static Stack shared;
@@ -55,6 +56,17 @@ static const char *root;
 
 static char *skips[64];
 static int nskips;
+
+// Live progress for the app (EVICT_PROGRESS): bytes counted so far under each folder of the first two levels,
+// and of the home folder, where most of the space usually is
+#define MAX_TRACK 4096
+typedef struct { char *path; _Atomic uint64_t bytes; } Track;
+static Track tracks[MAX_TRACK];
+static _Atomic int ntracks;
+static pthread_mutex_t tlock = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic uint64_t counted;
+static int live, home_track = -1;
+static const char *home;
 
 static uint64_t *links;
 static size_t nlinks, caplinks;
@@ -125,6 +137,27 @@ static int link_seen(uint64_t key) {
     return 0;
 }
 
+static int track(int parent, const char *name, size_t nlen) {
+    if (!live) return -1;
+    const char *base = parent < 0 ? root : tracks[parent].path;
+    size_t bl = strcmp(base, "/") ? strlen(base) : 0;
+    char *path = malloc(bl + nlen + 2);
+    if (!path) { perror("malloc"); exit(1); }
+    memcpy(path, base, bl);
+    path[bl] = '/';
+    memcpy(path + bl + 1, name, nlen + 1);
+    pthread_mutex_lock(&tlock);
+    int i = atomic_load(&ntracks);
+    if (i < MAX_TRACK) {
+        tracks[i].path = path;
+        if (home && !strcmp(path, home)) home_track = i;
+        atomic_store_explicit(&ntracks, i + 1, memory_order_release);
+    }
+    pthread_mutex_unlock(&tlock);
+    if (i == MAX_TRACK) { free(path); return -1; }
+    return i;
+}
+
 // Skip every mount point outside the boot APFS container, plus the firmlinked Data volume
 // (already reached through /Users, /Applications...) and the sealed system snapshot copy.
 static void init_skips(void) {
@@ -179,7 +212,7 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                       ATTR_CMN_OBJTYPE | ATTR_CMN_FILEID,
         .fileattr = ATTR_FILE_LINKCOUNT | ATTR_FILE_ALLOCSIZE,
     };
-    uint64_t count = 0;
+    uint64_t count = 0, bytes = 0;
     size_t first = local->n;
     for (;;) {
         int r = getattrlistbulk(fd, &al, buf, BUF_SIZE, 0);
@@ -230,13 +263,18 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                 Node *k = new_node(name, nlen, 1);
                 k->path = path;
                 add_kid(dir, k);
-                push(local, (Job){k, me});
+                Job kid = {k, me, j.t1, j.t2, j.t3, j.depth + 1};
+                if (j.depth == 0) kid.t1 = track(-1, name, nlen);
+                else if (j.depth == 1 && j.t1 >= 0) kid.t2 = track(j.t1, name, nlen);
+                else if (j.depth == 2 && j.t2 >= 0 && j.t2 == home_track) kid.t3 = track(j.t2, name, nlen);
+                push(local, kid);
             } else {
                 uint32_t nlink = 1;
                 uint64_t alloc = 0;
                 if (ret.fileattr & ATTR_FILE_LINKCOUNT) { memcpy(&nlink, cur, 4); cur += 4; }
                 if (ret.fileattr & ATTR_FILE_ALLOCSIZE) { memcpy(&alloc, cur, 8); cur += 8; }
                 if (nlink > 1 && link_seen(fileid ^ ((uint64_t)(uint32_t)dev << 48))) continue;
+                bytes += alloc;
                 if (alloc >= MIN_SIZE) {
                     Node *k = new_node(name, nlen, 0);
                     k->size = alloc;
@@ -253,6 +291,12 @@ static void scan_dir(Job j, char *buf, Stack *local) {
     atomic_fetch_add_explicit(&pending, (long)added, memory_order_relaxed);
     release(me);
     atomic_fetch_add_explicit(&scanned, count, memory_order_relaxed);
+    if (live && bytes) {  // once per directory, not per file
+        atomic_fetch_add_explicit(&counted, bytes, memory_order_relaxed);
+        if (j.t1 >= 0) atomic_fetch_add_explicit(&tracks[j.t1].bytes, bytes, memory_order_relaxed);
+        if (j.t2 >= 0) atomic_fetch_add_explicit(&tracks[j.t2].bytes, bytes, memory_order_relaxed);
+        if (j.t3 >= 0) atomic_fetch_add_explicit(&tracks[j.t3].bytes, bytes, memory_order_relaxed);
+    }
 }
 
 static void *worker(void *arg) {
@@ -300,14 +344,36 @@ static uint64_t total(Node *n) {
     return n->size;
 }
 
-static void emit_str(const char *s) {
-    putchar('"');
+static void emit_str(FILE *f, const char *s) {
+    fputc('"', f);
     for (const unsigned char *c = (const unsigned char *)s; *c; c++) {
-        if (*c == '"' || *c == '\\') { putchar('\\'); putchar(*c); }
-        else if (*c < 0x20 || *c == '<') printf("\\u%04x", *c);  // '<' keeps "</script>" out of the page
-        else putchar(*c);
+        if (*c == '"' || *c == '\\') { fputc('\\', f); fputc(*c, f); }
+        else if (*c < 0x20 || *c == '<') fprintf(f, "\\u%04x", *c);  // '<' keeps "</script>" out of the page
+        else fputc(*c, f);
     }
-    putchar('"');
+    fputc('"', f);
+}
+
+// One JSON line on stderr: items and bytes so far, and the 200 biggest folders of the first two levels
+static uint64_t sizes[MAX_TRACK];
+static int by_live_size(const void *a, const void *b) {
+    uint64_t x = sizes[*(const int *)a], y = sizes[*(const int *)b];
+    return x < y ? 1 : x > y ? -1 : 0;
+}
+static void snapshot(uint64_t used) {
+    static int order[MAX_TRACK];
+    int n = atomic_load_explicit(&ntracks, memory_order_acquire);
+    for (int i = 0; i < n; i++) { order[i] = i; sizes[i] = atomic_load_explicit(&tracks[i].bytes, memory_order_relaxed); }
+    qsort(order, n, sizeof *order, by_live_size);
+    fprintf(stderr, "{\"count\":%llu,\"bytes\":%llu,\"used\":%llu,\"dirs\":[", (unsigned long long)atomic_load(&scanned),
+            (unsigned long long)atomic_load(&counted), (unsigned long long)used);
+    for (int k = 0; k < n && k < 200 && sizes[order[k]]; k++) {
+        fputs(k ? ",[" : "[", stderr);
+        emit_str(stderr, tracks[order[k]].path);
+        fprintf(stderr, ",%llu]", (unsigned long long)sizes[order[k]]);
+    }
+    fputs("]}\n", stderr);
+    fflush(stderr);
 }
 
 static int by_size(const void *a, const void *b) {
@@ -318,7 +384,7 @@ static int by_size(const void *a, const void *b) {
 // [name,size] for files, [name,size,[kids],err?] for dirs, [null,size,count] for merged small items
 static void emit(Node *n) {
     putchar('[');
-    emit_str(n->name);
+    emit_str(stdout, n->name);
     printf(",%llu", (unsigned long long)n->size);
     if (n->dir) {
         qsort(n->kids, n->nkids, sizeof *n->kids, by_size);
@@ -354,53 +420,60 @@ int main(int argc, char **argv) {
         if (setrlimit(RLIMIT_NOFILE, &rl)) { rl.rlim_cur = OPEN_MAX; setrlimit(RLIMIT_NOFILE, &rl); }
     }
     init_skips();
-    static char out[1 << 20];
+    static char out[1 << 20], err[1 << 16];
     setvbuf(stdout, out, _IOFBF, sizeof out);
+    setvbuf(stderr, err, _IOFBF, sizeof err);  // flushed after each progress line
+    live = getenv("EVICT_PROGRESS") != NULL;
+    home = getenv("HOME");
+    struct statvfs vfs;
+    statvfs(root, &vfs);
+    uint64_t used = (uint64_t)(vfs.f_blocks - vfs.f_bavail) * vfs.f_frsize;
 
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
     Node *top = new_node(root, strlen(root), 1);
     if (skip_state(root) == 2) top->path = strdup(root);
-    push(&shared, (Job){top, NULL});
+    push(&shared, (Job){top, NULL, -1, -1, -1, 0});
     atomic_store(&pending, 1);
 
     long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
     int nth = ncpu < 1 ? 1 : ncpu > MAX_THREADS ? MAX_THREADS : (int)ncpu;
     pthread_t th[MAX_THREADS];
     for (int i = 0; i < nth; i++) pthread_create(&th[i], NULL, worker, NULL);
-    int tty = isatty(2) || getenv("EVICT_PROGRESS");
+    int tty = isatty(2) && !live;
     uint64_t last = 0;
-    int still = 0;
+    int still = 0, tick = 0;
     while (atomic_load(&pending)) {
         uint64_t now = atomic_load(&scanned);
-        if (tty) fprintf(stderr, "\r%llu items…", (unsigned long long)now);
+        if (tty) { fprintf(stderr, "\r%llu items…", (unsigned long long)now); fflush(stderr); }
+        if (live && tick++ % 3 == 0) snapshot(used);
         // No progress for 30 s means the remaining threads wait on macOS privacy prompts: keep what we have
         if (now != last) { last = now; still = 0; }
         else if (++still >= 300) {
             atomic_store(&stopping, 1);
             fprintf(stderr, "\nScan stalled on a macOS permission prompt: partial results. "
                             "Give Full Disk Access to see everything.\n");
+            fflush(stderr);
             break;
         }
         usleep(100000);
     }
     if (!atomic_load(&stopping))
         for (int i = 0; i < nth; i++) pthread_join(th[i], NULL);
+    if (live) snapshot(used);  // the live map ends complete
     total(top);
     clock_gettime(CLOCK_MONOTONIC, &t1);
     double secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
 
-    struct statvfs vfs;
     statvfs(root, &vfs);
     char date[32];
     time_t now = time(NULL);
     strftime(date, sizeof date, "%Y-%m-%d %H:%M", localtime(&now));
-    const char *home = getenv("HOME");
 
     printf("{\"total\":%llu,\"free\":%llu,\"count\":%llu,\"secs\":%.1f,\"date\":\"%s\",\"home\":",
            (unsigned long long)vfs.f_blocks * vfs.f_frsize, (unsigned long long)vfs.f_bavail * vfs.f_frsize,
            (unsigned long long)atomic_load(&scanned), secs, date);
-    emit_str(home ? home : "");
+    emit_str(stdout, home ? home : "");
     fputs(",\"tree\":", stdout);
     emit(top);
     puts("}");

@@ -36,11 +36,16 @@ struct EvictApp: App {
 
 @MainActor
 final class Model: ObservableObject {
-    enum State: Equatable { case idle, needsAccess, scanning(UInt64), ready(URL), failed(String) }
+    enum State: Equatable { case idle, needsAccess, scanning, ready(URL), failed(String) }
     @Published var state = State.idle
     @Published var update: Updater.Release?
     @Published var updating = false
+    @Published var page: URL?  // live map while scanning, then the final one
     weak var webView: WKWebView?
+
+    init() {
+        Task.detached { _ = Model.claude }  // a login shell may be needed: keep it off the main thread
+    }
     private var watching = false
 
     // At launch, then every 6 hours for Macs that keep Evict open
@@ -135,39 +140,49 @@ final class Model: ObservableObject {
 
     func scan() {
         if isScanning { return }
-        state = .scanning(0)
+        state = .scanning
         guard let scanner = Bundle.main.url(forAuxiliaryExecutable: "evict-scan"),
               let template = Bundle.main.url(forResource: "index", withExtension: "html") else {
             state = .failed("App files are missing, please reinstall Evict.")
             return
         }
+        page = Model.livePage(template: template) ?? page
         Task {
             let result = await Task.detached(priority: .userInitiated) {
-                Model.runScan(scanner: scanner, template: template) { count in
-                    Task { @MainActor in if self.isScanning { self.state = .scanning(count) } }
+                Model.runScan(scanner: scanner, template: template) { line in
+                    Task { @MainActor in self.showLive(line) }
                 }
             }.value
             switch result {
-            case .success(let url): state = .ready(url)
+            case .success(let url): page = url; state = .ready(url)
             case .failure(let error): state = .failed(error.localizedDescription)
             }
         }
     }
 
-    nonisolated static func runScan(scanner: URL, template: URL, progress: @escaping @Sendable (UInt64) -> Void) -> Result<URL, Error> {
-        _ = claude  // resolved during the scan rather than on the main thread when the page opens
+    private func showLive(_ line: String) {
+        webView?.evaluateJavaScript("evictLive(\(line))")
+    }
+
+    // The page in live mode: the scanner's progress lines draw the map while it fills up
+    private static func livePage(template: URL) -> URL? {
+        guard let html = try? String(contentsOf: template, encoding: .utf8) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("evict-live.html")
+        let live = html.replacingOccurrences(of: "window.DATA = null; /* __DATA__ */", with: "window.DATA = null; window.LIVE = {root: '/'};")
+        return (try? live.write(to: url, atomically: true, encoding: .utf8)) != nil ? url : nil
+    }
+
+    nonisolated static func runScan(scanner: URL, template: URL, progress: @escaping @Sendable (String) -> Void) -> Result<URL, Error> {
         let process = Process(), out = Pipe(), err = Pipe()
         process.executableURL = scanner
         process.arguments = ["/"]
         process.environment = ["EVICT_PROGRESS": "1", "HOME": NSHomeDirectory()]
         process.standardOutput = out
         process.standardError = err
-        // The scanner writes "\r<count> items…" to stderr while it runs
+        // With EVICT_PROGRESS the scanner writes a JSON progress line on stderr every 300 ms; only the latest matters
+        let buffer = LineBuffer()
         err.fileHandleForReading.readabilityHandler = { handle in
-            let text = String(decoding: handle.availableData, as: UTF8.self)
-            if let last = text.split(separator: "\r").last, let count = UInt64(last.prefix(while: \.isNumber)) {
-                progress(count)
-            }
+            if let line = buffer.lines(handle.availableData).last(where: { $0.hasPrefix("{") }) { progress(line) }
         }
         do {
             try process.run()
@@ -421,14 +436,14 @@ struct ContentView: View {
         Group {
             switch model.state {
             case .needsAccess: AccessView()
-            case .idle, .scanning: ScanningView()
-            case .ready(let url): WebView(url: url, model: model).ignoresSafeArea()
             case .failed(let message):
                 VStack(spacing: 12) {
                     Text("The scan failed").font(.title2.weight(.semibold))
                     Text(message).foregroundStyle(.secondary)
                     Button("Try Again") { model.scan() }
                 }
+            default:
+                if let page = model.page { WebView(url: page, model: model).ignoresSafeArea() } else { ScanningView() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -495,9 +510,6 @@ struct ScanningView: View {
         VStack(spacing: 14) {
             ProgressView().controlSize(.large)
             Text("Scanning the disk…").font(.title2.weight(.semibold))
-            if case .scanning(let count) = model.state {
-                Text("\(count.formatted(.number.locale(Locale(identifier: "en_US")))) items").monospacedDigit().foregroundStyle(.secondary)
-            }
             if !model.hasFullDiskAccess {
                 VStack(spacing: 8) {
                     Text("Without Full Disk Access, Mail, Messages and Safari aren’t counted.")
@@ -525,11 +537,30 @@ struct WebView: NSViewRepresentable {
         let view = EvictWebView(frame: .zero, configuration: config)
         view.setValue(false, forKey: "drawsBackground")  // no white flash before the page paints
         model.webView = view
+        context.coordinator.loaded = url
         view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         return view
     }
 
-    func updateNSView(_ view: WKWebView, context: Context) {}
+    // Same web view from the live map to the final one
+    func updateNSView(_ view: WKWebView, context: Context) {
+        guard context.coordinator.loaded != url else { return }
+        context.coordinator.loaded = url
+        view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+    }
+}
+
+// Splits a pipe's chunks into lines
+final class LineBuffer: @unchecked Sendable {
+    private var pending = Data()
+
+    func lines(_ chunk: Data) -> [String] {
+        pending.append(chunk)
+        guard let end = pending.lastIndex(of: 10) else { return [] }
+        let text = String(decoding: pending[..<end], as: UTF8.self)
+        pending.removeSubrange(...end)
+        return text.split(separator: "\n").map(String.init)
+    }
 }
 
 // Quick Look: while it's the first responder, the web view feeds the shared preview panel
@@ -554,6 +585,7 @@ final class EvictWebView: WKWebView, QLPreviewPanelDataSource {
 
 final class Bridge: NSObject, WKScriptMessageHandler {
     let model: Model
+    var loaded: URL?
     init(model: Model) { self.model = model }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
