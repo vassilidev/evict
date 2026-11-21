@@ -90,12 +90,44 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 #menu button:hover{background:#232834}
 #menu .m-note{padding:7px 10px;color:var(--mut);font-size:12px}
 #menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
-#ai{left:50%;top:50%;transform:translate(-50%,-50%);z-index:15;width:min(640px,calc(100vw - 32px));max-height:min(80vh,720px);display:flex;flex-direction:column;gap:12px;padding:16px 18px}
-#ai h3{margin:0 0 3px;font-size:15px;overflow-wrap:anywhere}
-#ai code{color:var(--mut);overflow-wrap:anywhere}
-.a-body{overflow:auto;white-space:pre-wrap;line-height:1.55;color:#d7dbe3;min-height:60px}
-.a-body.wait{color:var(--mut)}
-.a-foot{display:flex;justify-content:flex-end;gap:8px}
+#ai{position:fixed;top:10px;right:10px;bottom:10px;z-index:15;width:min(540px,calc(100vw - 20px));display:flex;flex-direction:column;background:rgba(21,24,30,.97);backdrop-filter:blur(10px);border:1px solid #2e3440;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.55);animation:slide .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes slide{from{transform:translateX(24px);opacity:0}}
+.a-head{display:grid;grid-template-columns:1fr auto;gap:3px 12px;padding:16px 18px 14px;border-bottom:1px solid var(--line)}
+.a-kicker{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#e08a6b}
+#ai h3{margin:0;font-size:17px;overflow-wrap:anywhere}
+#ai-path{color:var(--mut);overflow-wrap:anywhere}
+#ai-close{grid-column:2;grid-row:1/4;align-self:start;width:28px;height:28px;padding:0;border-radius:8px}
+#ai-body{flex:1;overflow:auto;padding:16px 18px;line-height:1.6;color:#d7dbe3;font-size:13.5px}
+.a-foot{display:flex;align-items:center;gap:8px;padding:12px 18px;border-top:1px solid var(--line)}
+#ai-status{flex:1;color:var(--mut);font-size:12px;font-variant-numeric:tabular-nums}
+.a-wait{display:flex;align-items:center;gap:10px;color:#c7ccd6;margin-bottom:16px}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid #3a404c;border-top-color:#e08a6b;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sk{height:11px;border-radius:6px;margin:12px 0;background:linear-gradient(90deg,#1d2129 0,#2c313c 50%,#1d2129 100%);background-size:200% 100%;animation:sk 1.3s ease-in-out infinite}
+.sk.s{width:60%}
+@keyframes sk{from{background-position:100% 0}to{background-position:-100% 0}}
+.a-err{color:#ff8b7e}
+button.ai{color:#f2a58a;border-color:#4a3129}
+button.ai:hover{border-color:#e08a6b;background:#251a16}
+.md>:first-child{margin-top:0}
+.md p{margin:0 0 10px}
+.md h2{font-size:17px;margin:24px 0 10px;color:#fff}
+.md h3{font-size:15.5px;margin:26px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line);color:#fff}
+.md h4{font-size:14px;margin:18px 0 4px;color:#fff}
+.md ul,.md ol{margin:0 0 10px;padding-left:20px}
+.md li{margin:4px 0}
+.md strong{color:#fff}
+.md code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#232834;border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+.md code.path{color:#a8c8ff;cursor:pointer}
+.md code.path:hover{background:#2b3446;text-decoration:underline}
+.md pre{background:#0f1217;border:1px solid var(--line);border-radius:8px;padding:10px 12px;overflow:auto;margin:0 0 10px}
+.md pre code{background:none;padding:0}
+.md table{border-collapse:collapse;width:100%;margin:0 0 12px;font-size:12.5px}
+.md th,.md td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+.md th{color:var(--mut);font-weight:600}
+.md hr{border:0;border-top:1px solid var(--line);margin:16px 0}
+.md.live>:last-child::after{content:"";display:inline-block;width:7px;height:14px;margin-left:3px;vertical-align:-2px;background:#e08a6b;border-radius:1px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
 #toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,10px);background:var(--fg);color:#000;padding:8px 14px;border-radius:8px;opacity:0;transition:.18s;pointer-events:none;font-weight:600;z-index:20}
 #toast.on{opacity:1;transform:translate(-50%,0)}
 #empty{padding:40px;color:var(--mut)}
@@ -103,7 +135,7 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 
 @media (max-width:1150px){#stats{display:none}}
 @media (max-width:760px){.bottom{flex-wrap:wrap}#q{width:150px}}
-@media (prefers-reduced-motion:reduce){.box,.ring,.row,.tw,#tip,#toast{transition:none}.found{animation:none}}
+@media (prefers-reduced-motion:reduce){.box,.ring,.row,.tw,#tip,#toast{transition:none}.found,#ai,.sk{animation:none}}
 </style>
 </head>
 <body>
@@ -119,7 +151,8 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
     <div id="legend"></div>
     <div class="acts">
       <button id="masked" hidden></button>
-      <button id="cur-ai"></button>
+      <button id="cur-wins" class="ai"></button>
+      <button id="cur-ai" class="ai"></button>
       <button id="cur-finder">Show in Finder</button>
       <button id="cur-cp">Copy path</button>
       <button id="cur-rm" class="danger">Copy rm -rf</button>
@@ -130,11 +163,16 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 <div id="list" hidden></div>
 <div id="tip" class="pop"></div>
 <div id="menu" class="pop" hidden></div>
-<div id="ai" class="pop" role="dialog" aria-labelledby="ai-title" hidden>
-  <div><h3 id="ai-title"></h3><code id="ai-path"></code></div>
-  <div id="ai-body" class="a-body"></div>
-  <div class="a-foot"><button id="ai-copy">Copy prompt</button><button id="ai-close">Close</button></div>
-</div>
+<aside id="ai" role="dialog" aria-labelledby="ai-title" hidden>
+  <div class="a-head">
+    <span class="a-kicker">✦ Claude</span>
+    <button id="ai-close" aria-label="Close">✕</button>
+    <h3 id="ai-title"></h3>
+    <code id="ai-path"></code>
+  </div>
+  <div id="ai-body" class="md"></div>
+  <div class="a-foot"><span id="ai-status"></span><button id="ai-copy-md" hidden>Copy answer</button><button id="ai-copy">Copy prompt</button></div>
+</aside>
 <div id="toast"></div>
 <script>
 window.DATA = null; /* __DATA__ */
@@ -170,6 +208,57 @@ const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !/^\/Users\
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
 const label = n => n[0] ?? `${nf(n[2], 0)} other items`;
 const pct = x => x * 100 < 0.1 ? '<0.1%' : nf(x * 100, 1) + '%';
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Minimal Markdown for Claude's answers; paths in backticks become clickable
+function inlineMd(s) {
+  const codes = [];
+  return esc(s.replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`))
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(^|[^\w*])\*(?!\s)(.+?)\*(?!\w)/g, '$1<em>$2</em>').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => `<code${/^(~\/|\/)/.test(codes[i]) ? ' class="path" title="Show in Evict"' : ''}>${esc(codes[i])}</code>`);
+}
+function md(src) {
+  const out = [];
+  let list = null, para = [], code = null, table = null;
+  const close = () => {
+    if (para.length) out.push(`<p>${para.map(inlineMd).join('<br>')}</p>`);
+    if (list) out.push(`</${list}>`);
+    if (table) out.push(`<table>${table.map((cells, r) => `<tr>${cells.map(c => r ? `<td>${inlineMd(c)}</td>` : `<th>${inlineMd(c)}</th>`).join('')}</tr>`).join('')}</table>`);
+    para = []; list = null; table = null;
+  };
+  for (const line of src.split('\n')) {
+    let m;
+    if (code) { if (/^\s*```/.test(line)) { out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`); code = null } else code.push(line); continue }
+    if (/^\s*```/.test(line)) { close(); code = []; continue }
+    if ((m = line.match(/^\s*\|(.*)\|\s*$/))) {
+      if (!table) { close(); table = [] }
+      if (!/^[\s|:-]+$/.test(m[1])) table.push(m[1].split('|').map(c => c.trim()));
+      continue;
+    }
+    if (table) close();
+    if ((m = line.match(/^(#{1,6})\s+(.*)/))) { close(); const h = Math.min(4, m[1].length + 1); out.push(`<h${h}>${inlineMd(m[2])}</h${h}>`); continue }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { close(); out.push('<hr>'); continue }
+    if ((m = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)/))) {
+      const item = inlineMd(m[3]), last = out.length - 1;
+      // One level of nesting: an indented item goes inside the previous one
+      if (list && m[1].length >= 2) {
+        out[last] = out[last].endsWith('</ul></li>') ? out[last].replace(/<\/ul><\/li>$/, `<li>${item}</li></ul></li>`) : out[last].replace(/<\/li>$/, `<ul><li>${item}</li></ul></li>`);
+        continue;
+      }
+      const t = /\d/.test(m[2]) ? 'ol' : 'ul';
+      if (list !== t) { close(); out.push(t === 'ol' ? `<ol start="${parseInt(m[2])}">` : '<ul>'); list = t }
+      out.push(`<li>${item}</li>`);
+      continue;
+    }
+    if (!line.trim()) { if (!list) close(); continue }
+    if (list && /^\s+\S/.test(line)) { out[out.length - 1] = out.at(-1).replace(/<\/li>$/, ' ' + inlineMd(line.trim()) + '</li>'); continue }
+    if (list) close();
+    para.push(line);
+  }
+  if (code) out.push(`<pre><code>${esc(code.join('\n'))}</code></pre>`);
+  close();
+  return out.join('');
+}
 
 function catOf(n, p) {
   if (n.cat) return n.cat;
@@ -302,43 +391,140 @@ if (D) {
   const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'rm command copied');
   if (app) $('cur-rm').textContent = 'Delete this folder…';
 
-  // In the app, the prompt runs through the local Claude Code CLI when it's installed; otherwise it's copied for any AI chat
+  // Ask AI: in the app, prompts run through the local Claude Code CLI and stream into a side panel; otherwise they're copied for any AI chat
   const claude = !!(app && window.evictClaude);
   let langName = 'English';
   try { langName = new Intl.DisplayNames(['en'], {type: 'language'}).of((window.evictLang || navigator.language).split('-')[0]) || langName } catch {}
-  function aiPrompt(n, p, v) {
-    let text = `I'm freeing up disk space on my Mac. What is this ${isDir(n) ? 'folder' : 'file'}?\n\nPath: ${p}\nSize on disk: ${fmt(v)}\n`;
+  const tilde = p => D.home && (p === D.home || p.startsWith(D.home + '/')) ? '~' + p.slice(D.home.length) : p;
+  const rules = `Only advise: don't delete anything and don't run any command. Answer in ${langName}, in Markdown, and write every path in backticks.`;
+
+  function itemPrompt(n, p, v) {
+    let text = `I'm freeing up disk space on my Mac. What is this ${isDir(n) ? 'folder' : 'file'}?\n\nPath: ${tilde(p)} (~ is my home folder)\nSize on disk: ${fmt(v)}\n`;
     if (isDir(n)) text += 'Largest items inside:\n' + [...n[2]].sort((a, b) => b[1] - a[1]).slice(0, 10)
       .map(k => `- ${label(k)}${isDir(k) ? '/' : ''}: ${fmt(k[1])}`).join('\n') + '\n';
     return text + `
-Please tell me:
-1. What it is, and which app, tool or part of macOS creates it.
-2. Whether it's safe to delete, and what happens if I do (lost data or settings, re-downloaded, rebuilt automatically…).
-3. The cleanest way to free this space (the app's own setting or command, if there is one), and whether it will grow back.
+Answer briefly, in this shape:
+- First line, in bold: a verdict, exactly one of "✅ Safe to delete", "⚠️ Delete with care" or "⛔ Keep it", then a short reason.
+- "### What it is": what it is, and which app, tool or part of macOS creates it.
+- "### If you delete it": what happens (lost data or settings, re-downloaded, rebuilt automatically…) and whether it grows back.
+- "### How to clean it": the cleanest way, the app's own setting or cleanup command first.
 
-Only explain: don't delete anything and don't run any command. Keep it short. Answer in ${langName}.`;
+${rules}`;
   }
-  let askId = 0;
-  function ask(n, p, v) {
-    const text = aiPrompt(n, p, v);
-    if (!claude) return copy(text, 'AI prompt copied: paste it into Claude, ChatGPT…');
-    $('ai-title').textContent = `What is “${label(n)}”?`;
-    $('ai-path').textContent = p;
-    $('ai-body').textContent = 'Asking Claude… this usually takes 10 to 30 seconds.';
-    $('ai-body').className = 'a-body wait';
+
+  // A digest of the whole scan: the folder tree down to ~1 GB, regenerable folders and large files
+  function quickWinsPrompt() {
+    const used = isDisk ? D.total - D.free : total(root, root[0]), min = Math.max(1e9, used * 0.004);
+    const outline = [], junk = [], files = [];
+    const tree = (n, p, depth) => {
+      for (const it of itemsOf(n[2], p).filter(it => it.p && isDir(it.n) && it.v >= min).slice(0, 8)) {
+        outline.push(`${'  '.repeat(depth)}${tilde(it.p)}/ ${fmt(it.v)}`);
+        if (depth < 5) tree(it.n, it.p, depth + 1);
+      }
+    };
+    const walk = (n, p, inJunk) => {
+      for (const k of n[2]) {
+        const kp = kidPath(p, k), v = kp ? total(k, kp) : 0;
+        if (!v) continue;
+        const c = catOf(k, kp);
+        if (c === 'junk' && !inJunk) junk.push([kp, v]);
+        if (!isDir(k) && v >= 300e6) files.push([kp, v, c]);
+        if (isDir(k)) walk(k, kp, inJunk || c === 'junk');
+      }
+    };
+    tree(root, root[0], 0);
+    walk(root, root[0], false);
+    const list = (a, max) => a.sort((x, y) => y[1] - x[1]).slice(0, max).map(([p, v, c]) => `- ${tilde(p)}: ${fmt(v)}${c && c !== 'data' ? ` (${CATS[c][0].toLowerCase()})` : ''}`).join('\n') || '- none';
+    return `I'm freeing up disk space on my Mac. Here is a summary of a full scan made with Evict (real sizes on disk, ~ is my home folder${masked.size ? ', folders I chose to hide are left out' : ''}).
+
+${isDisk ? `Disk: ${fmt(D.total)}, ${fmt(used)} used, ${fmt(D.free)} free.` : `Scanned folder: ${tilde(root[0])}, ${fmt(used)}.`}
+
+Largest folders:
+${outline.join('\n')}
+
+Regenerable folders (caches, build outputs, dependencies…):
+${list(junk, 30)}
+
+Large files:
+${list(files, 30)}
+
+Give me a personal cleanup plan:
+1. Start with one bold line: how much space the safe quick wins free in total.
+2. "## Quick wins": the safest, biggest gains first, at most 8. For each: a "### " heading with what it is and its size, the path, one line on what I lose, then how to clean it properly (the app's own setting or cleanup command first, e.g. Docker, Xcode, simulators, Homebrew, npm; otherwise move it to the Trash).
+3. "## Worth a look": what needs my judgment (old downloads, disk images, videos, virtual machines), one line each.
+4. "## Leave alone": what looks big but shouldn't be deleted, one line each.
+Only cite paths from this scan, written exactly as above.
+${rules}`;
+  }
+
+  let askId = 0, answer = '', started = 0, timer = 0, paintFrame = 0;
+  const secs = () => Math.round((Date.now() - started) / 1000);
+  const tick = () => { $('ai-status').textContent = `${answer ? 'Writing' : 'Thinking'}… ${secs()} s` };
+  function openAI(title, sub, text) {
+    $('ai-title').textContent = title;
+    $('ai-path').textContent = sub;
     $('ai-copy').onclick = () => copy(text, 'Prompt copied');
+    $('ai-copy-md').hidden = true;
+    $('ai-body').className = 'md';
+    $('ai-body').innerHTML = '<div class="a-wait"><i class="spin"></i>Claude is thinking…</div><div class="sk"></div><div class="sk"></div><div class="sk s"></div>';
     $('ai').hidden = false;
+    answer = ''; started = Date.now();
+    clearInterval(timer); timer = setInterval(tick, 1000); tick();
     app.postMessage({action: 'ask', id: ++askId, prompt: text});
   }
-  const closeAI = () => { $('ai').hidden = true };
-  $('ai-close').onclick = closeAI;
-  // Called by the macOS app with Claude's answer
-  window.evictAnswer = (id, answer, ok) => {
+  function ask(n, p, v) {
+    const text = itemPrompt(n, p, v);
+    if (!claude) return copy(text, 'AI prompt copied: paste it into Claude, ChatGPT…');
+    openAI(label(n), `${tilde(p)} · ${fmt(v)}`, text);
+  }
+  function quickWins() {
+    const text = quickWinsPrompt();
+    if (!claude) return copy(text, 'Quick wins prompt copied: paste it into Claude, ChatGPT…');
+    openAI('Quick wins', 'A personal cleanup plan for this disk', text);
+  }
+  function closeAI() {
+    if ($('ai').hidden) return;
+    $('ai').hidden = true;
+    clearInterval(timer);
+    app?.postMessage({action: 'cancel'});
+  }
+  // Follows the answer as it streams, unless the reader scrolled up
+  function paint() {
+    const b = $('ai-body'), follow = b.scrollHeight - b.scrollTop - b.clientHeight < 40;
+    paintFrame = 0;
+    b.innerHTML = md(answer);
+    if (follow) b.scrollTop = b.scrollHeight;
+  }
+  // Called by the macOS app: kind is "delta" (a piece of the answer), "done" or "error"
+  window.evictAnswer = (id, text, kind) => {
     if (id !== askId || $('ai').hidden) return;
-    $('ai-body').textContent = ok ? answer.trim() : `Claude couldn't answer:\n\n${answer.trim()}`;
-    $('ai-body').className = 'a-body';
+    if (kind === 'delta') { answer += text; $('ai-body').classList.add('live'); paintFrame ||= requestAnimationFrame(paint); return }
+    clearInterval(timer); cancelAnimationFrame(paintFrame); paintFrame = 0;
+    $('ai-body').classList.remove('live');
+    if (kind === 'done' && answer) {
+      paint();
+      $('ai-status').textContent = `Answered in ${secs()} s`;
+      $('ai-copy-md').hidden = false;
+      $('ai-copy-md').onclick = () => copy(answer, 'Answer copied as Markdown');
+    } else {
+      $('ai-body').innerHTML = md(answer) + `<p class="a-err">${esc(text.trim() || "Claude stopped before answering.")}</p>`;
+      $('ai-status').textContent = 'No answer';
+    }
   };
+  $('ai-close').onclick = closeAI;
+  // A path in the answer opens it in Evict: the folder itself, or a file pointed out in its folder
+  $('ai-body').addEventListener('click', e => {
+    const c = e.target.closest('code.path');
+    if (!c) return;
+    const p = c.textContent.replace(/^~(?=\/|$)/, D.home).replace(/\/\*?$/, '') || '/';
+    if (pathOf(resolve(p)) === p) return go(p);
+    const parent = p.slice(0, p.lastIndexOf('/')) || '/', s = resolve(parent);
+    if (pathOf(s) === parent && s.at(-1)[2].some(k => k[0] !== null && join(parent, k[0]) === p)) return go(parent, p);
+    toast('Not in this scan');
+  });
   $('cur-ai').textContent = claude ? 'Ask Claude' : 'Copy AI prompt';
+  $('cur-wins').textContent = claude ? '✦ Quick wins' : 'Copy quick wins prompt';
+  $('cur-wins').onclick = quickWins;
 
   // Called by the macOS app once a path has been deleted (freed = true) or moved to the Trash
   window.evictRemoved = (path, freed) => {
@@ -410,7 +596,7 @@ Only explain: don't delete anything and don't run any command. Keep it short. An
   function openMenu(it, e) {
     const items = [];
     if (isDir(it.n)) items.push(menuItem('Open', () => go(it.p)));
-    items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem(claude ? 'Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(it.n, it.p, it.v)), menuItem('Hide', () => setMask(it.p, true)), el('hr'));
+    items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem(claude ? '✦ Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(it.n, it.p, it.v)), menuItem('Hide', () => setMask(it.p, true)), el('hr'));
     items.push(canRm(it.p) ? menuItem(app ? 'Delete…' : 'Copy rm -rf command', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Protected path: deletion disabled'));
     showMenu(label(it.n), fmt(it.v), items, e.clientX - 14, e.clientY - 14);
   }
@@ -631,7 +817,6 @@ Only explain: don't delete anything and don't run any command. Keep it short. An
   };
   document.addEventListener('mousedown', e => {
     if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target) && !$('list').contains(e.target)) closeMenu();
-    if (!$('ai').hidden && !$('ai').contains(e.target)) closeAI();
   });
   addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); $('q').focus(); $('q').select(); return }

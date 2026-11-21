@@ -288,36 +288,51 @@ final class Model: ObservableObject {
         return path.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }()
 
+    private var asking: Process?
+
+    // Streams Claude's answer into the page as it's written; a new question or closing the panel stops the previous one
     func ask(id: Int, prompt: String) {
-        Task {
-            let (text, ok) = await Task.detached { Model.askClaude(prompt) }.value
-            answer(id, text, ok)
-        }
-    }
-
-    private func answer(_ id: Int, _ text: String, _ ok: Bool) {
-        guard let arg = try? String(data: JSONEncoder().encode(text), encoding: .utf8) else { return }
-        webView?.evaluateJavaScript("evictAnswer(\(id), \(arg), \(ok))")
-    }
-
-    nonisolated static func askClaude(_ prompt: String) -> (String, Bool) {
-        guard let claude else { return ("Claude Code isn’t installed.", false) }
+        cancelAsk()
+        guard let claude = Model.claude else { return answer(id, "Claude Code isn’t installed.", "error") }
         let process = Process(), out = Pipe()
         process.executableURL = URL(fileURLWithPath: claude)
         // No tools at all: Claude can only answer, it can't read, run or delete anything
-        process.arguments = ["-p", "--tools", "", "--no-session-persistence", "--append-system-prompt", "Reply in plain text, without Markdown.", prompt]
+        process.arguments = ["-p", "--tools", "", "--no-session-persistence", "--output-format", "stream-json", "--include-partial-messages", "--verbose", prompt]
         process.currentDirectoryURL = FileManager.default.temporaryDirectory
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = out
         process.standardError = out
-        do {
-            try process.run()
-            let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            process.waitUntilExit()
-            return (text, process.terminationStatus == 0)
-        } catch {
-            return (error.localizedDescription, false)
+        do { try process.run() } catch { return answer(id, error.localizedDescription, "error") }
+        asking = process
+        Task {
+            var done = false, problem = ""
+            do {
+                for try await line in out.fileHandleForReading.bytes.lines {
+                    guard let event = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] else {
+                        problem += line + "\n"
+                        continue
+                    }
+                    if let delta = ((event["event"] as? [String: Any])?["delta"] as? [String: Any])?["text"] as? String {
+                        answer(id, delta, "delta")
+                    } else if event["type"] as? String == "result" {
+                        done = event["is_error"] as? Bool != true
+                        if !done { problem += event["result"] as? String ?? "" }
+                    }
+                }
+            } catch {}
+            if asking === process { asking = nil }
+            answer(id, problem, done ? "done" : "error")
         }
+    }
+
+    func cancelAsk() {
+        asking?.terminate()
+        asking = nil
+    }
+
+    private func answer(_ id: Int, _ text: String, _ kind: String) {
+        guard let arg = try? String(data: JSONEncoder().encode(text), encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("evictAnswer(\(id), \(arg), '\(kind)')")
     }
 }
 
@@ -460,6 +475,8 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             case "ask":
                 guard let id = body["id"] as? Int, let prompt = body["prompt"] as? String else { return }
                 model.ask(id: id, prompt: prompt)
+            case "cancel":
+                model.cancelAsk()
             default:
                 break
             }

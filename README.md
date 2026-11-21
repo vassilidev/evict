@@ -36,7 +36,10 @@
 - **A treemap**, finviz-style: each box's area is proportional to the space it takes. Click to drill into a folder, use the breadcrumb to go back up.
 - **A list view**: the same folder as a tree sorted by size, with bars and percentages. Expand folders in place to see the biggest items at a glance.
 - **Search** (`⌘F` or `/`) across the whole scan: every file and folder whose name matches, biggest first. Click a result to jump to it.
-- **Ask AI** what a folder or file is: Evict writes a prompt with its path, size and largest items, and asks what it is, which app creates it, whether it's safe to delete and how to clean it properly. Nothing is deleted. In the app, the answer comes from [Claude Code](https://claude.com/claude-code) when it's installed (run without any tools, so it can only answer). Otherwise the prompt is copied, ready to paste into any AI chat.
+- **Ask Claude** what a folder or file is: what it is, which app creates it, whether it's safe to delete (✅ / ⚠️ / ⛔) and how to clean it properly. Nothing is ever deleted for you.
+- **✦ Quick wins**: a personal cleanup plan for the whole disk. Evict sends Claude a digest of the scan (the folder tree down to about 1 GB, regenerable folders, large files) and gets back the safest, biggest gains first, what needs your judgment and what to leave alone, with each app's own cleanup command.
+
+  In the app, answers come from your local [Claude Code](https://claude.com/claude-code) and stream into a side panel as they're written, formatted, with every path clickable to jump to it in the map. Claude Code runs without any tools, so it can only answer. Without it, or in the browser, the prompt is copied, ready to paste into any AI chat.
 - **Colors that tell you something**:
   - 🟥 **regenerable**: caches, `node_modules`, DerivedData, builds, `.venv`…
   - 🟧 **archives and disk images**: zip, dmg, iso, VM images…
@@ -47,7 +50,7 @@
 - **Show in Finder** for any file or folder.
 - **Hide a folder** (`System`, for example) to give the rest more room. The choice is remembered across scans.
 - **Built-in updates**: Evict checks GitHub for new versions at launch and every 6 hours, tells you when one is out, and installs it in one click.
-- **100% local**: the scan never leaves your Mac. No telemetry, no dependencies, just a C scanner and an HTML page. The only network requests are the update check against GitHub and, when you click **Ask Claude**, that one prompt.
+- **100% local**: the scan never leaves your Mac. No telemetry, no dependencies, just a C scanner and an HTML page. The only network requests are the update check against GitHub and, when you click **Ask Claude** or **Quick wins**, that prompt (paths and sizes from the scan, never file contents).
 
 ## Install
 
@@ -98,6 +101,8 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | **Map** / **List** | Switch views (remembered) |
 | `⌘F` or `/` | Search files and folders · `Esc` clears |
 | **Ask Claude** / **Copy AI prompt** | Ask what the current folder is |
+| **✦ Quick wins** | A personal cleanup plan for the whole disk |
+| Click a path in Claude's answer | Jump to it in the map |
 | `⌫` or `Esc` | Go up one level |
 | Click a category | Highlight it |
 | "N hidden" button | Show hidden folders again |
@@ -139,7 +144,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.3.0 && git push origin v1.3.0
+git tag v1.4.0 && git push origin v1.4.0
 ```
 
 ## Known limitations
