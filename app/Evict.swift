@@ -206,24 +206,49 @@ final class Model: ObservableObject {
         guard path.hasPrefix("/"), (path as NSString).standardizingPath == path,
               path.split(separator: "/").count >= 2 else { return false }
         if path.range(of: #"^/(System|private|usr|bin|sbin|cores)(/|$)"#, options: .regularExpression) != nil { return false }
-        if path.range(of: #"^/Users/[^/]+(/Library)?$"#, options: .regularExpression) != nil { return false }
+        if path.range(of: #"^/Users/[^/]+(/Library|/\.Trash)?$"#, options: .regularExpression) != nil { return false }
         return true
     }
 
+    static let trashPath = (NSHomeDirectory() as NSString).appendingPathComponent(".Trash")
+
     func confirmDelete(path: String, size: Int64) {
         guard Model.canRemove(path) else { return }
+        let inTrash = path.hasPrefix(Model.trashPath + "/")
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Delete “\((path as NSString).lastPathComponent)”?"
-        alert.informativeText = "\(Model.bytes(size)) · \(path)\n\nThe Trash keeps it recoverable, but the space is only freed once the Trash is emptied."
-        alert.addButton(withTitle: "Move to Trash")
+        alert.informativeText = "\(Model.bytes(size)) · \(path)\n\n" + (inTrash
+            ? "It’s already in the Trash: it will be deleted permanently."
+            : "The Trash keeps it recoverable, but the space is only freed once the Trash is emptied.")
+        if !inTrash { alert.addButton(withTitle: "Move to Trash") }
         alert.addButton(withTitle: "Delete Permanently").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: trash(path)
-        case .alertSecondButtonReturn: delete(path)
+        switch (alert.runModal(), inTrash) {
+        case (.alertFirstButtonReturn, false): trash(path)
+        case (.alertFirstButtonReturn, true), (.alertSecondButtonReturn, false): delete(path)
         default: break
         }
+    }
+
+    // Empties the user's Trash item by item; the page can only ask for this exact folder
+    func confirmEmptyTrash(path: String, size: Int64) {
+        guard path == Model.trashPath else { return }
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: path)) ?? []
+        guard !items.isEmpty else { return inform("The Trash is already empty", "Rescan to update the map.") }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Empty the Trash?"
+        alert.informativeText = "\(items.count) item\(items.count > 1 ? "s" : ""), \(Model.bytes(size)), will be deleted permanently. This can’t be undone."
+        alert.addButton(withTitle: "Empty Trash").hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let failed = items.filter { (try? FileManager.default.removeItem(atPath: (path as NSString).appendingPathComponent($0))) == nil }
+        if !failed.isEmpty {
+            inform("Some items couldn’t be deleted", "\(failed.count) item\(failed.count > 1 ? "s belong" : " belongs") to another user or are in use. Empty the Trash from the Finder to remove them.")
+        }
+        guard let arg = try? String(data: JSONEncoder().encode(path), encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("evictEmptied(\(arg))")
     }
 
     private func trash(_ path: String) {
@@ -474,6 +499,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             case "delete":
                 guard let path = body["path"] as? String else { return }
                 model.confirmDelete(path: path, size: (body["size"] as? NSNumber)?.int64Value ?? 0)
+            case "emptyTrash":
+                guard let path = body["path"] as? String else { return }
+                model.confirmEmptyTrash(path: path, size: (body["size"] as? NSNumber)?.int64Value ?? 0)
             case "ask":
                 guard let id = body["id"] as? Int, let prompt = body["prompt"] as? String else { return }
                 model.ask(id: id, prompt: prompt)

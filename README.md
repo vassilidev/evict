@@ -35,7 +35,9 @@
 - **The whole disk, fast**: 5.7 million files (426 GB) in 20 s on a Mac mini M4 Pro, and 27 s cold, right after a reboot.
 - **A treemap**, finviz-style: each box's area is proportional to the space it takes. Click to drill into a folder, use the breadcrumb to go back up.
 - **A list view**: the same folder as a tree sorted by size, with bars and percentages. Expand folders in place to see the biggest items at a glance.
-- **Search** (`⌘F` or `/`) across the whole scan: every file and folder whose name matches, biggest first. Click a result to jump to it.
+- **Search** (`⌘F` or `/`) across the whole scan: every file and folder whose name matches, biggest first, with their total size. Click a result to jump to it.
+- **Filter by extension**: type `.mov .mp4` (or click one of the extensions that weigh the most, listed as soon as you click the search field) to see every video, disk image or archive on the disk.
+- **Trash and Downloads at a glance**: two shortcuts in the header show their size and open them in one click, including every Downloads folder on the disk. Items you move to the Trash from Evict show up there, and **Empty Trash…** frees the space for good.
 - **Ask Claude** what a folder or file is: what it is, which app creates it, whether it's safe to delete (✅ / ⚠️ / ⛔) and how to clean it properly. Nothing is ever deleted for you.
 - **✦ Quick wins**: a personal cleanup plan for the whole disk. Evict sends Claude a digest of the scan (the folder tree down to about 1 GB, regenerable folders, large files) and gets back the safest, biggest gains first, what needs your judgment and what to leave alone, with each app's own cleanup command.
 
@@ -46,7 +48,7 @@
   - 🟪 **media**, 🟦 **apps**, 🟩 **data**, ⬛ **system**
 
   Click a category to highlight it.
-- **Built-in cleanup** (app): move to Trash or delete permanently. The administrator password is only asked for when needed, and system paths are protected.
+- **Built-in cleanup** (app): move to Trash, delete permanently or empty the Trash. The administrator password is only asked for when needed, and system paths are protected.
 - **Show in Finder** for any file or folder.
 - **Hide a folder** (`System`, for example) to give the rest more room. The choice is remembered across scans.
 - **Built-in updates**: Evict checks GitHub for new versions at launch and every 6 hours, tells you when one is out, and installs it in one click.
@@ -100,6 +102,8 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | Click a file · right-click · `⋯` | Menu: open, show in Finder, copy path, ask AI, hide, delete |
 | **Map** / **List** | Switch views (remembered) |
 | `⌘F` or `/` | Search files and folders · `Esc` clears |
+| `.mov .mp4` in the search field | Filter by extension |
+| **Trash** / **Downloads** | Open them · **Empty Trash…** when you're in the Trash |
 | **Ask Claude** / **Copy AI prompt** | Ask what the current folder is |
 | **✦ Quick wins** | A personal cleanup plan for the whole disk |
 | Click a path in Claude's answer | Jump to it in the map |
@@ -144,7 +148,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.4.1 && git push origin v1.4.1
+git tag v1.5.0 && git push origin v1.5.0
 ```
 
 ## Known limitations

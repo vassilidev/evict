@@ -32,6 +32,14 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 #q{font:inherit;font-size:12.5px;width:240px;flex-shrink:0;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 10px;outline:none;transition:border-color .15s}
 #q:focus{border-color:#5b6476}
 #q::placeholder{color:#6b7383}
+#places{display:flex;gap:6px;flex-shrink:0}
+.place{display:flex;align-items:center;gap:6px;color:#c7ccd6}
+.place svg{width:13px;height:13px;flex-shrink:0}
+.place.on{border-color:var(--fg);color:var(--fg)}
+#exts{padding:10px;width:380px;display:flex;flex-wrap:wrap;gap:6px}
+#exts .x-head{width:100%;color:var(--mut);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:0 2px 2px}
+#exts .chip{border-radius:20px;padding:3px 10px;color:#c7ccd6}
+#exts .chip b{color:var(--fg);font-weight:650}
 .seg{display:flex;flex-shrink:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
 .seg button{border:0;border-radius:0;background:none;color:var(--mut);padding:4px 12px}
 .seg button.on{background:#262b35;color:var(--fg)}
@@ -71,7 +79,6 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 .nm.wrap{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .sz{opacity:.82;margin-top:2px;font-weight:500;font-variant-numeric:tabular-nums}
 .box.dim{opacity:.15}
-.c-free{background:transparent!important;border:1px dashed #353c49;color:#6f7787}
 .c-hidden{background:repeating-linear-gradient(45deg,#181b22 0 6px,#1e2129 6px 12px)!important;color:#7d8595}
 
 .pop{position:fixed;left:0;top:0;z-index:10;background:rgba(21,24,30,.96);backdrop-filter:blur(8px);border:1px solid #2e3440;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.45);max-width:440px}
@@ -143,7 +150,8 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
   <div class="top">
     <div class="brand">Evict<span>.</span></div>
     <nav id="crumbs"></nav>
-    <input id="q" type="search" placeholder="Search files and folders" autocomplete="off" spellcheck="false" aria-label="Search files and folders">
+    <div id="places"></div>
+    <input id="q" type="search" placeholder="Search files, folders or .ext" autocomplete="off" spellcheck="false" aria-label="Search files and folders, or filter by extension">
     <div id="stats"></div>
   </div>
   <div class="bottom">
@@ -163,6 +171,7 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 <div id="list" hidden></div>
 <div id="tip" class="pop"></div>
 <div id="menu" class="pop" hidden></div>
+<div id="exts" class="pop" hidden></div>
 <aside id="ai" role="dialog" aria-labelledby="ai-title" hidden>
   <div class="a-head">
     <span class="a-kicker">✦ Claude</span>
@@ -190,7 +199,6 @@ const CATS = {
   sys:    ['System', '#5f6675'],
   misc:   ['Small files', '#394050'],
   hidden: ['Invisible', '#2a2e37'],
-  free:   ['Free', '#1d2129'],
 };
 const JUNK = /^(node_modules|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
 const ARCH = /\.(zip|dmg|iso|pkg|tar|gz|tgz|bz2|xz|7z|rar|xip|raw|img|qcow2|vmdk|vdi|ipsw|sparseimage|sparsebundle|bak)$/i;
@@ -204,9 +212,11 @@ const join = (p, name) => p === '/' ? '/' + name : p + '/' + name;
 const kidPath = (p, k) => k[0] === null || k.cat ? null : join(p, k[0]);
 const quote = p => "'" + p.replace(/'/g, "'\\''") + "'";
 // Never offer rm on the disk root, top-level folders, home folders or macOS system paths
-const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !/^\/Users\/[^/]+(\/Library)?$/.test(p);
+const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !/^\/Users\/[^/]+(\/Library|\/\.Trash)?$/.test(p);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
 const label = n => n[0] ?? `${nf(n[2], 0)} other items`;
+const extOf = name => (name.match(/^.+\.([^.\s]+)$/)?.[1] || '').toLowerCase();
+const BUNDLE = /\.(app|photoslibrary|fcpbundle|imovielibrary|logicx|band|xcarchive|sparsebundle)$/i;
 const pct = x => x * 100 < 0.1 ? '<0.1%' : nf(x * 100, 1) + '%';
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -310,12 +320,9 @@ if (D) {
   stats();
   $('stats').title = `Scanned on ${D.date}`;
 
-  const free = Object.assign(['Free space', D.free], {cat: 'free'}), extra = [];
-  if (isDisk) {
-    const hidden = D.total - D.free - root[1];
-    if (hidden > 0) extra.push(Object.assign(['Not visible to the scan (snapshots, protected files)', hidden], {cat: 'hidden'}));
-    extra.push(free);
-  }
+  // Space the scan couldn't see; free space only shows in the stats, a box of nothing helps no one
+  const extra = [], hidden = isDisk ? D.total - D.free - root[1] : 0;
+  if (hidden > 0) extra.push(Object.assign(['Not visible to the scan (snapshots, protected files)', hidden], {cat: 'hidden'}));
 
   // Folders the user chose to hide from the map, remembered across scans
   let masked;
@@ -324,7 +331,8 @@ if (D) {
 
   // Visible size (hidden folders excluded) and bytes per category, memoized until the tree or the mask changes
   let totals = new Map(), mixes = new Map();
-  const resetMemo = () => { totals = new Map(); mixes = new Map() };
+  let downloads = null, extStats = null;
+  const resetMemo = () => { totals = new Map(); mixes = new Map(); downloads = extStats = null };
   function total(n, p) {
     if (n.cat || !isDir(n)) return p && masked.has(p) ? 0 : n[1];
     if (masked.has(p)) return 0;
@@ -389,7 +397,6 @@ if (D) {
   const copyPath = p => copy(p, 'Path copied');
   const reveal = p => app ? app.postMessage({action: 'reveal', path: p}) : copy('open -R ' + quote(p), 'Command copied: paste it in Terminal');
   const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'rm command copied');
-  if (app) $('cur-rm').textContent = 'Delete this folder…';
 
   // Ask AI: in the app, prompts run through the local Claude Code CLI and stream into a side panel; otherwise they're copied for any AI chat
   const claude = !!(app && window.evictClaude);
@@ -531,14 +538,75 @@ ${rules}`;
     const cut = path.lastIndexOf('/'), parentPath = path.slice(0, cut) || '/', name = path.slice(cut + 1);
     const s = resolve(parentPath), parent = s.at(-1), k = parent[2].findIndex(n => n[0] === name);
     if (pathOf(s) !== parentPath || k < 0) return;
-    const size = parent[2][k][1];
-    parent[2].splice(k, 1);
+    const [node] = parent[2].splice(k, 1), size = node[1];
     for (const n of s) n[1] -= size;
+    const t = trash();
+    if (!freed && t && !path.startsWith(t.p + '/')) { t.s.at(-1)[2].push(node); for (const n of t.s) n[1] += size }
     resetMemo();
-    if (freed) { D.free += size; free[1] = D.free; stats() }
+    if (freed) { D.free += size; stats() }
     toast(freed ? `${fmt(size)} freed` : `${fmt(size)} moved to the Trash`);
     if (curPath === path || curPath.startsWith(path + '/')) go(parentPath); else render(false);
   };
+
+  // Called by the macOS app once the Trash has been emptied
+  window.evictEmptied = path => {
+    const s = nodeAt(path);
+    if (!s) return;
+    const size = s.at(-1)[1];
+    s.at(-1)[2].length = 0;
+    for (const n of s) n[1] -= size;
+    resetMemo();
+    D.free += size; stats();
+    toast(`${fmt(size)} freed`);
+    render(false);
+  };
+
+  // Places to check on any disk: the Trash, where "Move to Trash" sends things, and every Downloads folder
+  const nodeAt = p => { const s = resolve(p); return pathOf(s) === p ? s : null };
+  const trash = () => [D.home + '/.Trash', D.home + '/.local/share/Trash'].map(p => ({p, s: nodeAt(p)})).find(t => t.s);
+  function downloadsList() {
+    const out = [];
+    const walk = (n, p) => {
+      for (const k of n[2]) {
+        if (!isDir(k)) continue;
+        const kp = join(p, k[0]), v = total(k, kp);
+        if (!v || SYS.test(kp)) continue;
+        if (/^downloads$/i.test(k[0])) out.push({p: kp, v}); else walk(k, kp);
+      }
+    };
+    walk(root, root[0]);
+    return out.sort((a, b) => b.v - a.v);
+  }
+  const ICONS = {
+    trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg>',
+    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>',
+  };
+  function placeChip(icon, text, on, onclick) {
+    const b = el('button', 'place' + (on ? ' on' : ''));
+    b.innerHTML = ICONS[icon];
+    b.append(text);
+    b.onclick = onclick;
+    return b;
+  }
+  function renderPlaces() {
+    const chips = [], t = trash();
+    if (t) {
+      const v = total(t.s.at(-1), t.p);
+      chips.push(placeChip('trash', v ? `Trash · ${fmt(v)}` : 'Trash · empty', curPath === t.p || curPath.startsWith(t.p + '/'), () => go(t.p)));
+    }
+    downloads ??= downloadsList();
+    if (downloads.length) {
+      const on = downloads.some(d => curPath === d.p || curPath.startsWith(d.p + '/'));
+      chips.push(placeChip('down', `Downloads · ${fmt(downloads.reduce((sum, d) => sum + d.v, 0))}`, on, e => {
+        if (downloads.length === 1) return go(downloads[0].p);
+        const r = e.currentTarget.getBoundingClientRect();
+        showMenu('Downloads folders', `${downloads.length} folders`, downloads.map(d => menuItem(`${tilde(d.p)} · ${fmt(d.v)}`, () => go(d.p))), r.left - 14, r.bottom - 6);
+      }));
+    }
+    $('places').replaceChildren(...chips);
+  }
+  const emptyTrash = (p, size) => app ? app.postMessage({action: 'emptyTrash', path: p, size})
+    : copy(`osascript -e 'tell application "Finder" to empty trash'`, 'Command copied: paste it in Terminal');
 
   function setMask(p, on) {
     on ? masked.add(p) : p ? masked.delete(p) : masked.clear();
@@ -702,26 +770,68 @@ ${rules}`;
     add([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0);
     $('list').replaceChildren(frag);
   }
-  // Searches the whole scan, hidden folders excluded; the scanner groups files under 1 MB, so those can't be found
+  // Searches the whole scan, hidden folders excluded; the scanner groups files under 1 MB, so those can't be found.
+  // ".mov .mp4" keeps those extensions, every other word must appear in the name (or in the path when it holds a /)
   function renderResults(q) {
-    const needle = q.toLowerCase(), byPath = needle.includes('/'), found = [];
-    const walk = (n, p) => {
+    const terms = q.toLowerCase().split(/\s+/).filter(Boolean), isExt = t => /^\*?\.[^./]+$/.test(t);
+    const exts = terms.filter(isExt).map(t => t.replace(/^\*?\./, '')), words = terms.filter(t => !isExt(t));
+    const match = (name, p) => (!exts.length || exts.includes(extOf(name)) || exts.includes(name.toLowerCase().slice(1)))
+      && words.every(w => (w.includes('/') ? p : name).toLowerCase().includes(w));
+    const found = [];
+    let sum = 0;
+    const walk = (n, p, inside) => {
       for (const k of n[2]) {
         const kp = kidPath(p, k), v = kp ? total(k, kp) : 0;
         if (!v) continue;
-        if ((byPath ? kp : k[0]).toLowerCase().includes(needle)) found.push({n: k, p: kp, v});
-        if (isDir(k)) walk(k, kp);
+        const hit = match(k[0], kp);
+        if (hit) { found.push({n: k, p: kp, v}); if (!inside) sum += v }
+        if (isDir(k)) walk(k, kp, inside || hit);
       }
     };
-    walk(root, root[0]);
+    walk(root, root[0], false);
     found.sort((a, b) => b.v - a.v);
     const shown = found.slice(0, 300), base = total(root, root[0]), frag = document.createDocumentFragment();
     frag.append(el('div', 'lhead', found.length
-      ? `${nf(found.length, 0)} result${found.length > 1 ? 's' : ''} for “${q}”${found.length > shown.length ? `, the ${shown.length} largest shown` : ''}`
-      : `Nothing named “${q}”. Files under 1 MB are grouped by the scanner, so they can't be searched.`));
+      ? `${nf(found.length, 0)} result${found.length > 1 ? 's' : ''} for “${q}” · ${fmt(sum)}${found.length > shown.length ? `, the ${shown.length} largest shown` : ''}`
+      : `Nothing matches “${q}”. Files under 1 MB are grouped by the scanner, so they can't be searched.`));
     rows = [];
     for (const it of shown) frag.append(rowEl(it, 0, base, it.p.slice(0, it.p.lastIndexOf('/')) || '/', shown[0].v));
     $('list').replaceChildren(frag);
+  }
+
+  // Extensions that weigh the most outside system folders, offered as one-click filters under the search field
+  function extList() {
+    const m = new Map();
+    const walk = (n, p) => {
+      for (const k of n[2]) {
+        const kp = kidPath(p, k), v = kp ? total(k, kp) : 0;
+        if (!v || SYS.test(kp)) continue;
+        const dir = isDir(k), e = !dir || BUNDLE.test(k[0]) ? extOf(k[0]) : '';
+        if (e) { const x = m.get(e) || [0, 0]; x[0] += v; x[1]++; m.set(e, x) }
+        if (dir && !BUNDLE.test(k[0])) walk(k, kp);
+      }
+    };
+    walk(root, root[0]);
+    return [...m].sort((a, b) => b[1][0] - a[1][0]);
+  }
+  const hideExts = () => { $('exts').hidden = true };
+  function showExts() {
+    const v = $('q').value.trim();
+    if (!/^(\.[^\s.]*)?$/.test(v)) return hideExts();
+    extStats ??= extList();
+    const list = extStats.filter(([e]) => e.startsWith(v.slice(1).toLowerCase())).slice(0, 18), box = $('exts');
+    if (!list.length) return hideExts();
+    box.replaceChildren(el('div', 'x-head', 'Filter by type'), ...list.map(([e, [size, count]]) => {
+      const b = el('button', 'chip');
+      b.append(el('b', '', '.' + e), ` ${fmt(size)}`);
+      b.title = `${nf(count, 0)} item${count > 1 ? 's' : ''} of 1 MB or more`;
+      b.onmousedown = ev => ev.preventDefault();  // keeps the focus in the field
+      b.onclick = () => { $('q').value = '.' + e; hideExts(); render(false) };
+      return b;
+    }));
+    box.hidden = false;
+    const r = $('q').getBoundingClientRect();
+    box.style.transform = `translate(${Math.max(8, Math.min(r.left, innerWidth - box.offsetWidth - 8))}px,${r.bottom + 6}px)`;
   }
 
   function render(fade) {
@@ -736,8 +846,11 @@ ${rules}`;
     }));
     $('cur-cp').onclick = () => copyPath(curPath);
     $('cur-finder').onclick = () => reveal(curPath);
-    $('cur-rm').hidden = !canRm(curPath);
-    $('cur-rm').onclick = () => remove(curPath, cur[1]);
+    const t = trash(), inTrash = t?.p === curPath;
+    $('cur-rm').hidden = !inTrash && !canRm(curPath);
+    $('cur-rm').textContent = inTrash ? (app ? 'Empty Trash…' : 'Copy empty-trash command') : (app ? 'Delete this folder…' : 'Copy rm -rf');
+    $('cur-rm').onclick = inTrash ? () => emptyTrash(curPath, cur[1]) : () => remove(curPath, cur[1]);
+    renderPlaces();
     $('cur-ai').hidden = stack.length === 1;
     $('cur-ai').onclick = () => ask(cur, curPath, total(cur, curPath));
 
@@ -809,7 +922,9 @@ ${rules}`;
     render(true);
   };
   let searchTimer;
-  $('q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => render(false), 120) });
+  $('q').addEventListener('input', () => { showExts(); clearTimeout(searchTimer); searchTimer = setTimeout(() => render(false), 120) });
+  $('q').addEventListener('focus', showExts);
+  $('q').addEventListener('blur', hideExts);
 
   $('masked').onclick = e => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -823,7 +938,7 @@ ${rules}`;
     if (e.metaKey || e.ctrlKey) return;
     if (e.key === 'Escape' && !$('ai').hidden) return closeAI();
     if (e.target === $('q')) {
-      if (e.key === 'Escape') { $('q').value = ''; $('q').blur(); render(false) }
+      if (e.key === 'Escape') { $('q').value = ''; $('q').blur(); hideExts(); render(false) }
       return;
     }
     if (e.key === '/') { e.preventDefault(); $('q').focus() }
