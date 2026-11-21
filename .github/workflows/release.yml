@@ -1,6 +1,7 @@
 name: Release
 
-# Push a tag like v1.2.0 (matching CFBundleShortVersionString in app/Info.plist) to publish a release
+# Push a tag like v1.2.0 (matching CFBundleShortVersionString in app/Info.plist) to publish a release.
+# With the signing secrets set, the DMG is signed with Developer ID and notarized by Apple.
 on:
   push:
     tags: ['v*']
@@ -11,6 +12,8 @@ permissions:
 jobs:
   dmg:
     runs-on: macos-15
+    env:
+      SIGNED: ${{ secrets.DEVELOPER_ID_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -22,8 +25,35 @@ jobs:
       - name: Scanner matches du
         run: ./test.sh
 
-      - name: Build the universal app and DMG
+      - name: Import the Developer ID certificate
+        if: env.SIGNED == 'true'
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(uuidgen)
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          echo "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/developer-id.p12"
+
+      - name: Build, sign and notarize the DMG
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: ./build.sh dmg
+
+      - name: Check the signature
+        if: env.SIGNED == 'true'
+        run: |
+          codesign --verify --deep --strict --verbose=2 .build/Evict.app
+          spctl --assess --type execute --verbose .build/Evict.app || echo "Gatekeeper assessment needs notarization"
 
       - name: Publish the DMG
         env:
