@@ -1,0 +1,21 @@
+#!/bin/sh
+# Usage: ./evict [dossier]   (par défaut : tout le disque)
+set -e
+dir=$(dirname "$(realpath "$0")")
+bin="$dir/.build/scan"
+if [ ! -x "$bin" ] || [ "$dir/scan.c" -nt "$bin" ]; then
+  mkdir -p "$dir/.build"
+  cc -O2 -o "$bin" "$dir/scan.c"
+fi
+out="${TMPDIR:-/tmp}"
+out="${out%/}/evict.html"
+"$bin" "${1:-/}" > "$out.json"
+{
+  sed '/__DATA__/,$d' "$dir/index.html"
+  printf 'window.DATA='
+  cat "$out.json"
+  sed '1,/__DATA__/d' "$dir/index.html"
+} > "$out"
+rm -f "$out.json"
+echo "→ $out"
+open "$out"

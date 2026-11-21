@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Evict</title>
+<style>
+:root{--bg:#0c0e12;--panel:#15181e;--line:#252a34;--fg:#eceff4;--mut:#8b93a1;--gut:#07080b;--accent:#ff5d4f}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;display:grid;grid-template-rows:auto 1fr;overflow:hidden;-webkit-font-smoothing:antialiased}
+code{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace}
+button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:7px;padding:4px 10px;cursor:pointer;white-space:nowrap;transition:border-color .15s,background .15s}
+button:hover{border-color:#4b5363;background:#1c2028}
+button.danger{color:#ff8b7e}
+
+header{display:grid;gap:10px;padding:12px 14px 10px}
+.top,.bottom{display:flex;align-items:center;gap:12px;min-width:0}
+.brand{font-weight:800;font-size:16px;letter-spacing:.01em}
+.brand span{color:var(--accent)}
+#crumbs{display:flex;align-items:center;gap:2px;min-width:0;flex:1;overflow:hidden;font-size:14px}
+#crumbs a{color:var(--mut);text-decoration:none;padding:3px 7px;border-radius:6px;white-space:nowrap;transition:background .15s,color .15s}
+#crumbs a:hover{background:#1c2028;color:var(--fg)}
+#crumbs a:last-child{color:var(--fg);font-weight:650}
+#crumbs i{color:#4b5363;font-style:normal}
+#stats{color:var(--mut);white-space:nowrap}
+#legend{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+#legend button{display:flex;align-items:center;gap:7px;border-radius:20px;padding:3px 10px 3px 8px;color:#c7ccd6}
+#legend button.on{border-color:var(--fg);color:var(--fg)}
+#legend i{width:9px;height:9px;border-radius:3px}
+.acts{display:flex;gap:6px}
+
+#map{position:relative;overflow:hidden;background:var(--gut);margin:0 8px 8px;border-radius:8px}
+.box{position:absolute;overflow:hidden;cursor:pointer;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;line-height:1.12;transition:opacity .2s ease}
+.box.group{display:block;background:#171a21}
+/* One ring glides to the hovered box, a fainter one frames its parent folder */
+.ring{position:absolute;left:0;top:0;pointer-events:none;opacity:0;transition:transform .1s cubic-bezier(.2,.8,.2,1),width .1s cubic-bezier(.2,.8,.2,1),height .1s cubic-bezier(.2,.8,.2,1),opacity .12s ease}
+#ring{z-index:6;border-radius:3px;background:rgba(255,255,255,.09);box-shadow:inset 0 0 0 2px #fff,0 0 0 1px rgba(0,0,0,.5),0 6px 22px rgba(0,0,0,.45)}
+#ring2{z-index:5;border-radius:3px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
+.hd{height:17px;padding:2px 6px 0;display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:700;color:#9aa2b1;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;transition:color .14s}
+.box.group:hover>.hd{color:#fff}
+.hd span{overflow:hidden;text-overflow:ellipsis}
+.hd b{font-weight:600;color:#6b7383}
+.nm{font-weight:700;max-width:100%;padding:0 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.nm.wrap{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.sz{opacity:.82;margin-top:2px;font-weight:500;font-variant-numeric:tabular-nums}
+.box.dim{opacity:.15}
+.c-free{background:transparent!important;border:1px dashed #353c49;color:#6f7787}
+.c-hidden{background:repeating-linear-gradient(45deg,#181b22 0 6px,#1e2129 6px 12px)!important;color:#7d8595}
+
+.pop{position:fixed;left:0;top:0;z-index:10;background:rgba(21,24,30,.96);backdrop-filter:blur(8px);border:1px solid #2e3440;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.45);max-width:440px}
+#tip{pointer-events:none;padding:10px 12px;display:grid;gap:5px;opacity:0;transition:opacity .12s ease}
+#tip.on{opacity:1}
+#tip .t-name{font-weight:700;font-size:14px;overflow-wrap:anywhere}
+#tip .t-meta{display:flex;align-items:center;gap:7px;color:#c7ccd6}
+#tip .t-meta i{width:9px;height:9px;border-radius:3px}
+#tip code{color:var(--mut);overflow-wrap:anywhere}
+.hint{color:#6b7383;font-size:11px;padding-top:4px;border-top:1px solid var(--line);margin-top:2px}
+#menu{padding:5px;min-width:240px}
+#menu .m-head{padding:7px 10px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+#menu .m-head b{display:block;overflow-wrap:anywhere}
+#menu .m-head span{color:var(--mut);font-size:12px}
+#menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:7px 10px;border-radius:6px;font-size:13px;white-space:normal;overflow-wrap:anywhere}
+#menu button:hover{background:#232834}
+#menu .m-note{padding:7px 10px;color:var(--mut);font-size:12px}
+#menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+#toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,10px);background:var(--fg);color:#000;padding:8px 14px;border-radius:8px;opacity:0;transition:.18s;pointer-events:none;font-weight:600;z-index:20}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#empty{padding:40px;color:var(--mut)}
+[hidden]{display:none!important}
+
+@media (max-width:760px){#stats{display:none}.bottom{flex-wrap:wrap}}
+@media (prefers-reduced-motion:reduce){.box,.ring,#tip,#toast{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <div class="brand">Evict<span>.</span></div>
+    <nav id="crumbs"></nav>
+    <div id="stats"></div>
+  </div>
+  <div class="bottom">
+    <div id="legend"></div>
+    <div class="acts">
+      <button id="masked" hidden></button>
+      <button id="cur-cp">Copier le chemin</button>
+      <button id="cur-rm" class="danger">Copier rm -rf</button>
+    </div>
+  </div>
+</header>
+<div id="map"></div>
+<div id="tip" class="pop"></div>
+<div id="menu" class="pop" hidden></div>
+<div id="toast"></div>
+<script>
+window.DATA = null; /* __DATA__ */
+</script>
+<script>
+const D = window.DATA, $ = id => document.getElementById(id);
+if (!D) document.body.innerHTML = '<p id="empty">Pas de données : lance <code>./evict</code> pour scanner le disque et générer cette page.</p>';
+
+const CATS = {
+  junk:   ['Régénérable', '#e0473d'],
+  arch:   ['Archives & disques', '#e0921f'],
+  media:  ['Médias', '#9061f0'],
+  app:    ['Applications', '#3d7fe6'],
+  data:   ['Données', '#2ea36b'],
+  sys:    ['Système', '#5f6675'],
+  misc:   ['Petits fichiers', '#394050'],
+  hidden: ['Invisible', '#2a2e37'],
+  free:   ['Libre', '#1d2129'],
+};
+const JUNK = /^(node_modules|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
+const ARCH = /\.(zip|dmg|iso|pkg|tar|gz|tgz|bz2|xz|7z|rar|xip|raw|img|qcow2|vmdk|vdi|ipsw|sparseimage|sparsebundle|bak)$/i;
+const MEDIA = /\.(mov|mp4|m4v|mkv|avi|webm|jpe?g|png|heic|gif|tiff?|psd|cr2|nef|arw|dng|mp3|wav|aiff?|flac|m4a|aac|photoslibrary|fcpbundle|imovielibrary|logicx|band)$/i;
+const SYS = /^\/(System|private|usr|bin|sbin|cores)(\/|$)/;
+
+const nf = (v, d) => new Intl.NumberFormat('fr-FR', {maximumFractionDigits: d}).format(v);
+const fmt = b => { const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1000 && i < 4) { b /= 1000; i++ } return nf(b, i && b < 10 ? 1 : 0) + ' ' + u[i] };
+const isDir = n => n[0] !== null && Array.isArray(n[2]);
+const join = (p, name) => p === '/' ? '/' + name : p + '/' + name;
+const kidPath = (p, k) => k[0] === null || k.cat ? null : join(p, k[0]);
+const quote = p => "'" + p.replace(/'/g, "'\\''") + "'";
+// Never offer rm on the disk root, top-level folders, home folders or macOS system paths
+const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !/^\/Users\/[^/]+(\/Library)?$/.test(p);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
+const label = n => n[0] ?? `${nf(n[2], 0)} autres éléments`;
+
+function catOf(n, p) {
+  if (n.cat) return n.cat;
+  if (n[0] === null) return 'misc';
+  if (SYS.test(p)) return 'sys';
+  if (JUNK.test(n[0])) return 'junk';
+  if (/\.app$/i.test(n[0])) return 'app';
+  if (ARCH.test(n[0])) return 'arch';
+  if (MEDIA.test(n[0])) return 'media';
+  return isDir(n) ? null : 'data';
+}
+
+// Squarified treemap (Bruls et al.): grow a row while its worst aspect ratio improves, then lay it out
+function squarify(items, x, y, w, h) {
+  const out = [], total = items.reduce((s, it) => s + it.v, 0);
+  if (total <= 0 || w <= 0 || h <= 0) return out;
+  const k = w * h / total;
+  const worst = (sum, min, max, side) => Math.max(side * side * max / (sum * sum), sum * sum / (side * side * min));
+  let row = [], sum = 0;
+  const place = () => {
+    if (w >= h) {
+      const cw = sum / h; let cy = y;
+      for (const it of row) { const rh = it.v * k / cw; out.push([it, x, cy, cw, rh]); cy += rh }
+      x += cw; w -= cw;
+    } else {
+      const rh = sum / w; let cx = x;
+      for (const it of row) { const rw = it.v * k / rh; out.push([it, cx, y, rw, rh]); cx += rw }
+      y += rh; h -= rh;
+    }
+    row = []; sum = 0;
+  };
+  for (let i = 0; i < items.length;) {
+    const a = items[i].v * k, side = Math.min(w, h);
+    if (!row.length || worst(sum + a, a, row[0].v * k, side) <= worst(sum, row.at(-1).v * k, row[0].v * k, side)) { row.push(items[i++]); sum += a }
+    else place();
+  }
+  if (row.length) place();
+  return out;
+}
+
+if (D) {
+  const root = D.tree, isDisk = root[0] === '/';
+  // Inside the macOS app, deletion and clipboard go through the native bridge
+  const app = window.webkit?.messageHandlers?.evict;
+  const stats = () => {
+    $('stats').textContent = (isDisk ? `${fmt(D.total - D.free)} utilisés · ${fmt(D.free)} libres · ` : `${fmt(root[1])} · `)
+      + `${nf(D.count, 0)} éléments en ${nf(D.secs, 1)} s`;
+  };
+  stats();
+  $('stats').title = `Scan du ${D.date}`;
+
+  const free = Object.assign(['Espace libre', D.free], {cat: 'free'}), extra = [];
+  if (isDisk) {
+    const hidden = D.total - D.free - root[1];
+    if (hidden > 0) extra.push(Object.assign(['Invisible au scan (snapshots, fichiers protégés)', hidden], {cat: 'hidden'}));
+    extra.push(free);
+  }
+
+  // Folders the user chose to hide from the map, remembered across scans
+  let masked;
+  try { masked = new Set(JSON.parse(localStorage.getItem('evict.masked') || '[]')) } catch { masked = new Set() }
+  const saveMasked = () => { try { localStorage.setItem('evict.masked', JSON.stringify([...masked])) } catch {} };
+
+  // Visible size (hidden folders excluded) and bytes per category, memoized until the tree or the mask changes
+  let totals = new Map(), mixes = new Map();
+  const resetMemo = () => { totals = new Map(); mixes = new Map() };
+  function total(n, p) {
+    if (n.cat || !isDir(n)) return p && masked.has(p) ? 0 : n[1];
+    if (masked.has(p)) return 0;
+    let t = totals.get(n);
+    if (t === undefined) { t = 0; for (const k of n[2]) t += total(k, kidPath(p, k)); totals.set(n, t) }
+    return t;
+  }
+  function mix(n, p) {
+    let m = mixes.get(n);
+    if (m) return m;
+    m = {};
+    const t = total(n, p), c = catOf(n, p);
+    if (t > 0) {
+      if (c) m[c] = t;
+      else for (const k of n[2]) for (const [kc, v] of Object.entries(mix(k, kidPath(p, k)))) m[kc] = (m[kc] || 0) + v;
+    }
+    mixes.set(n, m);
+    return m;
+  }
+  const dominant = (n, p) => Object.entries(mix(n, p)).sort((a, b) => b[1] - a[1])[0]?.[0] || 'misc';
+
+  let stack, cur, curPath, viewSize, boxes = [], hovered = null, focusCat = null, tipW = 0, tipH = 0;
+  const ring = el('div', 'ring'), ring2 = el('div', 'ring');
+  ring.id = 'ring'; ring2.id = 'ring2';
+  const pathOf = s => s.slice(1).reduce((p, n) => join(p, n[0]), root[0]);
+  function resolve(path) {
+    const s = [root];
+    if (!path.startsWith(root[0])) return s;
+    for (const part of path.slice(root[0].length).split('/').filter(Boolean)) {
+      const n = s.at(-1)[2].find(k => k[0] === part && isDir(k));
+      if (!n) break;
+      s.push(n);
+    }
+    return s;
+  }
+  const go = p => { location.hash = encodeURIComponent(p) };
+
+  let toastTimer;
+  function toast(msg) {
+    $('toast').textContent = msg; $('toast').classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('on'), 1600);
+  }
+  async function copy(text, msg) {
+    if (app) app.postMessage({action: 'copy', text});
+    else try { await navigator.clipboard.writeText(text) }
+    catch { const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove() }
+    toast(msg);
+  }
+  const copyPath = p => copy(p, 'Chemin copié');
+  const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'Commande rm copiée');
+  if (app) $('cur-rm').textContent = 'Supprimer ce dossier…';
+
+  // Called by the macOS app once a path has been deleted (freed = true) or moved to the Trash
+  window.evictRemoved = (path, freed) => {
+    const cut = path.lastIndexOf('/'), parentPath = path.slice(0, cut) || '/', name = path.slice(cut + 1);
+    const s = resolve(parentPath), parent = s.at(-1), k = parent[2].findIndex(n => n[0] === name);
+    if (pathOf(s) !== parentPath || k < 0) return;
+    const size = parent[2][k][1];
+    parent[2].splice(k, 1);
+    for (const n of s) n[1] -= size;
+    resetMemo();
+    if (freed) { D.free += size; free[1] = D.free; stats() }
+    toast(freed ? `${fmt(size)} libérés` : `${fmt(size)} mis à la corbeille`);
+    if (curPath === path || curPath.startsWith(path + '/')) go(parentPath); else render(false);
+  };
+
+  function setMask(p, on) {
+    on ? masked.add(p) : p ? masked.delete(p) : masked.clear();
+    saveMasked(); resetMemo(); render(false);
+  }
+
+  function setRing(r, b) {
+    if (!b) { r.style.opacity = 0; return }
+    const fresh = r.style.opacity !== '1';
+    // A ring that was hidden appears in place instead of flying in from its last position
+    if (fresh) r.style.transition = 'opacity .12s ease';
+    r.style.transform = `translate(${b.x}px,${b.y}px)`;
+    r.style.width = b.w + 'px';
+    r.style.height = b.h + 'px';
+    r.style.opacity = 1;
+    if (fresh) { r.offsetWidth; r.style.transition = '' }
+  }
+  function hover(it) {
+    if (it === hovered) return;
+    hovered = it;
+    setRing(ring, it);
+    setRing(ring2, it && it.parent != null ? boxes[it.parent] : null);
+    const tip = $('tip');
+    if (!it) { tip.classList.remove('on'); return }
+    const meta = el('div', 't-meta'), dot = el('i');
+    dot.style.background = CATS[it.cat][1];
+    meta.append(dot, `${fmt(it.v)} · ${nf(it.v / viewSize * 100, 1)} % · ${CATS[it.cat][0]}`);
+    tip.replaceChildren(el('div', 't-name', it.title || label(it.n)), meta);
+    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', isDir(it.n) ? 'Clic : ouvrir · Clic droit : actions' : 'Clic : actions'));
+    tipW = tip.offsetWidth; tipH = tip.offsetHeight;
+    tip.classList.add('on');
+  }
+  function moveTip(x, y) {
+    const gap = 16;
+    const left = x + gap + tipW > innerWidth - 8 ? x - gap - tipW : x + gap;
+    const top = y + gap + tipH > innerHeight - 8 ? y - gap - tipH : y + gap;
+    $('tip').style.transform = `translate(${Math.max(8, left)}px,${Math.max(8, top)}px)`;
+  }
+
+  function place(pop, x, y) {
+    const r = pop.getBoundingClientRect(), gap = 14;
+    const left = x + gap + r.width > innerWidth - 8 ? x - gap - r.width : x + gap;
+    const top = y + gap + r.height > innerHeight - 8 ? y - gap - r.height : y + gap;
+    pop.style.transform = `translate(${Math.max(8, left)}px,${Math.max(8, top)}px)`;
+  }
+  const menuItem = (text, fn, cls) => { const b = el('button', cls, text); b.onclick = () => { closeMenu(); fn() }; return b };
+  function showMenu(title, sub, items, x, y) {
+    const menu = $('menu'), head = el('div', 'm-head');
+    head.append(el('b', '', title), el('span', '', sub));
+    menu.replaceChildren(head, ...items);
+    hover(null);
+    menu.hidden = false;
+    place(menu, x, y);
+  }
+  function openMenu(it, e) {
+    const items = [];
+    if (isDir(it.n)) items.push(menuItem('Ouvrir', () => go(it.p)));
+    items.push(menuItem('Copier le chemin', () => copyPath(it.p)), menuItem('Masquer de la carte', () => setMask(it.p, true)), el('hr'));
+    items.push(canRm(it.p) ? menuItem(app ? 'Supprimer…' : 'Copier la commande rm -rf', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Chemin protégé : suppression désactivée'));
+    showMenu(label(it.n), fmt(it.v), items, e.clientX - 14, e.clientY - 14);
+  }
+  const closeMenu = () => { $('menu').hidden = true };
+
+  function layout(nodes, p, x, y, w, h, depth, parent) {
+    const items = nodes.map(n => { const np = kidPath(p, n); return {n, p: np, v: total(n, np)} }).filter(it => it.v > 0).sort((a, b) => b.v - a.v);
+    const max = items[0]?.v || 1;
+    for (const [it, bx, by, bw, bh] of squarify(items, x, y, w, h)) {
+      const x0 = Math.round(bx), y0 = Math.round(by), x1 = Math.round(bx + bw), y1 = Math.round(by + bh);
+      const w2 = x1 - x0 - 1, h2 = y1 - y0 - 1;
+      if (w2 < 1 || h2 < 1) continue;
+      let {n, p: np, v} = it, title = null;
+      const big = isDir(n) && w2 > 80 && h2 > 46 && depth < 4;
+      // A folder holding a single visible folder shares its header: "USERS › ME"
+      if (big) for (;;) {
+        const vis = n[2].filter(k => total(k, kidPath(np, k)) > 0);
+        if (vis.length !== 1 || !isDir(vis[0])) break;
+        title = (title || n[0]) + ' › ' + vis[0][0];
+        n = vis[0]; np = join(np, n[0]);
+      }
+      // Only folders with real children get a header; one made of small files stays a plain box
+      const group = big && n[2].some(k => k[0] !== null && total(k, kidPath(np, k)) > 0);
+      const cat = n.cat || (isDir(n) ? dominant(n, np) : catOf(n, np));
+      const b = el('div', 'box c-' + cat);
+      b.style.cssText = `left:${x0}px;top:${y0}px;width:${w2}px;height:${h2}px`;
+      b.dataset.i = boxes.push({n, p: np, v, cat, title, x: x0, y: y0, w: w2, h: h2, parent}) - 1;
+      b.dataset.c = cat;
+      $('map').append(b);
+      if (group) {
+        b.classList.add('group');
+        const hd = el('div', 'hd');
+        hd.append(el('span', '', title || n[0]), el('b', '', fmt(v)));
+        b.append(hd);
+        layout(n[2], np, x0 + 2, y0 + 17, w2 - 4, h2 - 19, depth + 1, +b.dataset.i);
+        continue;
+      }
+      if (!n.cat) b.style.background = CATS[cat][1];  // kept by WebKit versions without color-mix()
+      if (!n.cat) b.style.background = `color-mix(in oklab, ${CATS[cat][1]} ${Math.round(40 + 60 * Math.sqrt(v / max))}%, #0c0e12)`;
+      // Text scales with the box area so bigger storage always reads bigger; long names shrink a little, then wrap
+      const name = title || label(n), base = Math.max(9, Math.min(44, Math.sqrt(w2 * h2) / 7, h2 / 2.6));
+      const nameFs = Math.max(9, Math.min(base, Math.max(base * 0.7, w2 / (name.length * 0.6 + 0.8))));
+      const sizeFs = Math.max(9, base * 0.78);
+      if (w2 > 26 && h2 > 13) {
+        const t = el('div', 'nm', name);
+        t.style.fontSize = nameFs + 'px';
+        if (h2 > nameFs * 2.3 + sizeFs + 10 && name.length * nameFs * 0.6 > w2) {
+          t.classList.add('wrap');
+          t.textContent = name.replace(/([._-])/g, '$1\u200b');  // prefer breaking after . - _
+        }
+        b.append(t);
+        if (h2 > nameFs + sizeFs + 8 && w2 > 38) { const s = el('div', 'sz', fmt(v)); s.style.fontSize = sizeFs + 'px'; b.append(s) }
+      }
+    }
+  }
+
+  function renderLegend() {
+    const m = {...mix(cur, curPath)};
+    if (stack.length === 1) for (const e of extra) m[e.cat] = e[1];
+    $('legend').replaceChildren(...Object.keys(CATS).filter(c => m[c] > 0).map(c => {
+      const b = el('button', focusCat === c ? 'on' : ''), i = el('i');
+      i.style.background = CATS[c][1];
+      b.append(i, `${CATS[c][0]} · ${fmt(m[c])}`);
+      b.title = focusCat === c ? 'Tout afficher' : 'Mettre en évidence';
+      b.onclick = () => { focusCat = focusCat === c ? null : c; renderLegend(); applyFocus() };
+      return b;
+    }));
+    $('masked').hidden = !masked.size;
+    $('masked').textContent = `${masked.size} masqué${masked.size > 1 ? 's' : ''}`;
+  }
+  function applyFocus() {
+    for (const b of $('map').children) b.classList.toggle('dim', !!focusCat && !b.classList.contains('group') && b.dataset.c !== focusCat);
+  }
+
+  function render(fade) {
+    closeMenu();
+    stack = resolve(decodeURIComponent(location.hash.slice(1)) || root[0]);
+    cur = stack.at(-1); curPath = pathOf(stack);
+    viewSize = total(cur, curPath) + (stack.length === 1 ? extra.reduce((s, e) => s + e[1], 0) : 0);
+    $('crumbs').replaceChildren(...stack.flatMap((n, i) => {
+      const a = el('a', '', i ? n[0] : (isDisk ? 'Macintosh HD' : root[0]));
+      a.href = '#' + encodeURIComponent(pathOf(stack.slice(0, i + 1)));
+      return i ? [el('i', '', '›'), a] : [a];
+    }));
+    $('cur-cp').onclick = () => copyPath(curPath);
+    $('cur-rm').hidden = !canRm(curPath);
+    $('cur-rm').onclick = () => remove(curPath, cur[1]);
+
+    renderLegend();  // before layout: the legend height decides the map height
+    const map = $('map');
+    hovered = undefined; hover(null);
+    map.replaceChildren(); boxes = [];
+    lastSize = map.clientWidth + 'x' + map.clientHeight;
+    layout([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0, 0, map.clientWidth, map.clientHeight, 0);
+    map.append(ring2, ring);
+    if (fade && !matchMedia('(prefers-reduced-motion: reduce)').matches) map.animate([{opacity: 0}, {opacity: 1}], {duration: 180, easing: 'ease-out'});
+    applyFocus();
+  }
+
+  const boxAt = e => { const b = e.target.closest('.box'); return b ? boxes[b.dataset.i] : null };
+  let lastMove, frame = 0;
+  $('map').addEventListener('mousemove', e => {
+    lastMove = e;
+    frame ||= requestAnimationFrame(() => {
+      frame = 0;
+      if (!$('menu').hidden) return;
+      hover(boxAt(lastMove));
+      moveTip(lastMove.clientX, lastMove.clientY);
+    });
+  });
+  $('map').addEventListener('mouseleave', () => { cancelAnimationFrame(frame); frame = 0; hover(null) });
+  $('map').addEventListener('click', e => {
+    const it = boxAt(e);
+    if (!$('menu').hidden) return closeMenu();
+    if (!it || !it.p) return;
+    isDir(it.n) ? go(it.p) : openMenu(it, e);
+  });
+  $('map').addEventListener('contextmenu', e => { const it = boxAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
+  $('masked').onclick = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    showMenu('Masqués de la carte', 'Cliquer pour réafficher', [...[...masked].map(p => menuItem(p, () => setMask(p, false))), el('hr'), menuItem('Tout réafficher', () => setMask(null, false))], r.left - 14, r.bottom - 6);
+  };
+  document.addEventListener('mousedown', e => { if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target)) closeMenu() });
+  addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey) return;
+    if (e.key === 'Escape' && !$('menu').hidden) closeMenu();
+    else if ((e.key === 'Backspace' || e.key === 'Escape') && stack.length > 1) { e.preventDefault(); go(pathOf(stack.slice(0, -1))) }
+  });
+  addEventListener('hashchange', () => render(true));
+  let raf, lastSize = '';
+  new ResizeObserver(() => {
+    if ($('map').clientWidth + 'x' + $('map').clientHeight === lastSize) return;
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(() => render(false));
+  }).observe($('map'));
+  render(true);
+}
+</script>
+</body>
+</html>
