@@ -39,7 +39,7 @@
 - **Ask Claude** what a folder or file is: what it is, which app creates it, whether it's safe to delete (✅ / ⚠️ / ⛔) and how to clean it properly. Nothing is ever deleted for you.
 - **✦ Quick wins**: a personal cleanup plan for the whole disk. Evict sends Claude a digest of the scan (the folder tree down to about 1 GB, regenerable folders, large files) and gets back the safest, biggest gains first, what needs your judgment and what to leave alone, with each app's own cleanup command.
 
-  In the app, answers come from your local [Claude Code](https://claude.com/claude-code) and stream into a side panel as they're written, formatted, with every path clickable to jump to it in the map. Claude Code runs without any tools, so it can only answer. Without it, or in the browser, the prompt is copied, ready to paste into any AI chat.
+  In the app, answers come from your local [Claude Code](https://claude.com/claude-code) and stream into a side panel as they're written, formatted, with every path clickable to jump to it in the map. Claude Code runs Opus at low effort (a quick wins plan in about 20 seconds) and without any tools, so it can only answer. Without it, or in the browser, the prompt is copied, ready to paste into any AI chat.
 - **Colors that tell you something**:
   - 🟥 **regenerable**: caches, `node_modules`, DerivedData, builds, `.venv`…
   - 🟧 **archives and disk images**: zip, dmg, iso, VM images…
@@ -144,7 +144,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.4.0 && git push origin v1.4.0
+git tag v1.4.1 && git push origin v1.4.1
 ```
 
 ## Known limitations

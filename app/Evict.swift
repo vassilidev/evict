@@ -296,8 +296,10 @@ final class Model: ObservableObject {
         guard let claude = Model.claude else { return answer(id, "Claude Code isn’t installed.", "error") }
         let process = Process(), out = Pipe()
         process.executableURL = URL(fileURLWithPath: claude)
-        // No tools at all: Claude can only answer, it can't read, run or delete anything
-        process.arguments = ["-p", "--tools", "", "--no-session-persistence", "--output-format", "stream-json", "--include-partial-messages", "--verbose", prompt]
+        // No tools at all: Claude can only answer, it can't read, run or delete anything.
+        // Opus at low effort, measured: a quick wins plan in ~20 s (minutes at default effort), smarter advice than Sonnet
+        process.arguments = ["-p", "--model", "opus", "--effort", "low", "--tools", "", "--no-session-persistence",
+                             "--output-format", "stream-json", "--include-partial-messages", "--verbose", prompt]
         process.currentDirectoryURL = FileManager.default.temporaryDirectory
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = out

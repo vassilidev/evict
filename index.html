@@ -412,14 +412,14 @@ Answer briefly, in this shape:
 ${rules}`;
   }
 
-  // A digest of the whole scan: the folder tree down to ~1 GB, regenerable folders and large files
+  // A short digest of the scan: the biggest folders (system ones left out), regenerable folders and large files
   function quickWinsPrompt() {
-    const used = isDisk ? D.total - D.free : total(root, root[0]), min = Math.max(1e9, used * 0.004);
+    const used = isDisk ? D.total - D.free : total(root, root[0]), min = Math.max(1e9, used * 0.005);
     const outline = [], junk = [], files = [];
     const tree = (n, p, depth) => {
-      for (const it of itemsOf(n[2], p).filter(it => it.p && isDir(it.n) && it.v >= min).slice(0, 8)) {
+      for (const it of itemsOf(n[2], p).filter(it => it.p && isDir(it.n) && it.v >= min && !SYS.test(it.p)).slice(0, 6)) {
         outline.push(`${'  '.repeat(depth)}${tilde(it.p)}/ ${fmt(it.v)}`);
-        if (depth < 5) tree(it.n, it.p, depth + 1);
+        if (depth < 4) tree(it.n, it.p, depth + 1);
       }
     };
     const walk = (n, p, inJunk) => {
@@ -443,17 +443,17 @@ Largest folders:
 ${outline.join('\n')}
 
 Regenerable folders (caches, build outputs, dependencies…):
-${list(junk, 30)}
+${list(junk, 20)}
 
 Large files:
-${list(files, 30)}
+${list(files, 20)}
 
-Give me a personal cleanup plan:
+Give me a short, personal cleanup plan:
 1. Start with one bold line: how much space the safe quick wins free in total.
-2. "## Quick wins": the safest, biggest gains first, at most 8. For each: a "### " heading with what it is and its size, the path, one line on what I lose, then how to clean it properly (the app's own setting or cleanup command first, e.g. Docker, Xcode, simulators, Homebrew, npm; otherwise move it to the Trash).
-3. "## Worth a look": what needs my judgment (old downloads, disk images, videos, virtual machines), one line each.
-4. "## Leave alone": what looks big but shouldn't be deleted, one line each.
-Only cite paths from this scan, written exactly as above.
+2. "## Quick wins": the safest, biggest gains first, at most 6. For each: a "### " heading with what it is and its size, the path, then one line on what I lose and one line on how to clean it properly (the app's own setting or cleanup command first, e.g. Docker, Xcode, simulators, Homebrew, npm; otherwise move it to the Trash).
+3. "## Worth a look": at most 6 lines, what needs my judgment (old downloads, disk images, videos, virtual machines).
+4. "## Leave alone": at most 4 lines, what looks big but shouldn't be deleted.
+Be concise. Only cite paths from this scan, written exactly as above.
 ${rules}`;
   }
 
