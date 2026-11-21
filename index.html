@@ -39,6 +39,8 @@ body.live .bottom,body.live #places,body.live #q{display:none}
 .frame i{position:absolute;border-radius:4px;opacity:0;animation:pop ease both}
 @keyframes pop{0%{opacity:0;transform:scale(.6)}18%{opacity:1;transform:none}85%{opacity:1;transform:none}100%{opacity:0;transform:scale(.97)}}
 .stage-info{color:var(--mut);font-variant-numeric:tabular-nums}
+.stage-info b{color:var(--fg);font-weight:650}
+.stage-info i{font-style:normal;margin:0 9px;color:#4b5363}
 #places{display:flex;gap:6px;flex-shrink:0}
 .place{display:flex;align-items:center;gap:6px;color:#c7ccd6}
 .place svg{width:13px;height:13px;flex-shrink:0}
@@ -358,7 +360,19 @@ function live() {
   }
   build();
   setInterval(build, cycle);
-  window.evictLive = snap => { info.textContent = `${nf(snap.count, 0)} items · ${fmt(snap.bytes)}` };
+  // Items per second between two progress lines, smoothed so the figure doesn't jump around
+  const t0 = performance.now();
+  let last = null, rate = 0;
+  window.evictLive = snap => {
+    const now = performance.now(), secs = (now - t0) / 1000;
+    if (last && now > last.t) {
+      const r = (snap.count - last.count) / ((now - last.t) / 1000);
+      rate = rate ? rate * .6 + r * .4 : r;
+    }
+    last = {t: now, count: snap.count};
+    const time = secs < 60 ? `${nf(secs, 0)} s` : `${Math.floor(secs / 60)} min ${String(Math.floor(secs % 60)).padStart(2, '0')} s`;
+    info.innerHTML = [`<b>${nf(snap.count, 0)}</b> items`, `<b>${fmt(snap.bytes)}</b>`, `<b>${time}</b>`, `<b>${nf(rate, 0)}</b> items/s`].join('<i>·</i>');
+  };
 }
 if (!D && window.LIVE) live();
 

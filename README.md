@@ -33,7 +33,7 @@
 ## What Evict does
 
 - **The whole disk, fast**: 5.7 million files (426 GB) in 20 s on a Mac mini M4 Pro, and 27 s cold, right after a reboot.
-- **A light scan screen** (app): blocks build up while the disk is read, with the real item count and volume streamed by the scanner every 300 ms. The animation only moves layers on the GPU, so the scan keeps its full speed.
+- **A light scan screen** (app): blocks build up while the disk is read, with the real item count, volume, elapsed time and speed (items per second), streamed by the scanner every 300 ms. The animation only moves layers on the GPU, so the scan keeps its full speed.
 - **A treemap**, finviz-style: each box's area is proportional to the space it takes. Click to drill into a folder, use the breadcrumb to go back up.
 - **A list view**: the same folder as a tree sorted by size, with bars and percentages. Expand folders in place to see the biggest items at a glance.
 - **Search** (`⌘F` or `/`) across the whole scan: every file and folder whose name matches, biggest first, with their total size. Click a result to jump to it.
