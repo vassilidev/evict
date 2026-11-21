@@ -12,6 +12,7 @@ permissions:
 jobs:
   dmg:
     runs-on: macos-15
+    timeout-minutes: 240
     env:
       SIGNED: ${{ secrets.DEVELOPER_ID_P12 != '' }}
     steps:

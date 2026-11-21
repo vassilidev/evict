@@ -45,9 +45,10 @@ if [ -n "$identity" ]; then
     notary="--keychain-profile evict"
   fi
   if [ -n "$notary" ]; then
-    echo "→ Notarizing (a few minutes)"
+    # Usually a few minutes, but Apple can take much longer (first submissions of a new account especially)
+    echo "→ Notarizing"
     # shellcheck disable=SC2086
-    xcrun notarytool submit .build/Evict.dmg $notary --wait --timeout 30m | tee .build/notary.log
+    xcrun notarytool submit .build/Evict.dmg $notary --wait --timeout 3h | tee .build/notary.log
     grep -q 'status: Accepted' .build/notary.log || { echo "Notarization failed"; exit 1; }
     xcrun stapler staple .build/Evict.dmg
   else
