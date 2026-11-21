@@ -126,6 +126,10 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 .sk.s{width:60%}
 @keyframes sk{from{background-position:100% 0}to{background-position:-100% 0}}
 .a-err{color:#ff8b7e}
+.ar-sum{color:var(--mut);margin:0 0 10px}
+.ar-row{display:flex;justify-content:space-between;gap:14px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.ar-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ar-row b{flex-shrink:0;font-weight:600;font-variant-numeric:tabular-nums}
 button.ai{color:#f2a58a;border-color:#4a3129}
 button.ai:hover{border-color:#e08a6b;background:#251a16}
 .md>:first-child{margin-top:0}
@@ -186,7 +190,7 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 <div id="exts" class="pop" hidden></div>
 <aside id="ai" role="dialog" aria-labelledby="ai-title" hidden>
   <div class="a-head">
-    <span class="a-kicker">✦ Claude</span>
+    <span class="a-kicker" id="ai-kicker"></span>
     <button id="ai-close" aria-label="Close">✕</button>
     <h3 id="ai-title"></h3>
     <code id="ai-path"></code>
@@ -197,6 +201,7 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 <div id="selbar" hidden>
   <button id="sel-info" title="Review the selection"></button>
   <button id="sel-clear">Clear</button>
+  <button id="sel-preview">Preview</button>
   <button id="sel-finder">Show in Finder</button>
   <button id="sel-rm" class="danger"></button>
 </div>
@@ -234,6 +239,7 @@ const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !/^\/Users\
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
 const label = n => n[0] ?? `${nf(n[2], 0)} other items`;
 const extOf = name => (name.match(/^.+\.([^.\s]+)$/)?.[1] || '').toLowerCase();
+const ARCHIVE = /\.(zip|rar|7z|tar|tgz|tbz2?|txz|tar\.(gz|bz2|xz|zst)|iso|xip|cpio|xar|jar|apk|ipa|cbz|cbr)$/i;
 const BUNDLE = /\.(app|photoslibrary|fcpbundle|imovielibrary|logicx|band|xcarchive|sparsebundle)$/i;
 const pct = x => x * 100 < 0.1 ? '<0.1%' : nf(x * 100, 1) + '%';
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -484,18 +490,25 @@ ${rules}`;
 
   let askId = 0, answer = '', started = 0, timer = 0, paintFrame = 0;
   const secs = () => Math.round((Date.now() - started) / 1000);
-  const tick = () => { $('ai-status').textContent = `${answer ? 'Writing' : 'Thinking'}… ${secs()} s` };
-  function openAI(title, sub, text) {
+  let waitWord = 'Thinking';
+  const tick = () => { $('ai-status').textContent = `${answer ? 'Writing' : waitWord}… ${secs()} s` };
+  // The side panel shows Claude's answers and archive contents; prompt is set for Claude only
+  function openPanel(kicker, title, sub, loading, word, prompt) {
+    $('ai-kicker').textContent = kicker;
     $('ai-title').textContent = title;
     $('ai-path').textContent = sub;
-    $('ai-copy').onclick = () => copy(text, 'Prompt copied');
+    $('ai-copy').hidden = !prompt;
+    $('ai-copy').onclick = () => copy(prompt, 'Prompt copied');
     $('ai-copy-md').hidden = true;
     $('ai-body').className = 'md';
-    $('ai-body').innerHTML = '<div class="a-wait"><i class="spin"></i>Claude is thinking…</div><div class="sk"></div><div class="sk"></div><div class="sk s"></div>';
+    $('ai-body').innerHTML = `<div class="a-wait"><i class="spin"></i>${loading}…</div><div class="sk"></div><div class="sk"></div><div class="sk s"></div>`;
     $('ai').hidden = false;
-    answer = ''; started = Date.now();
+    answer = ''; started = Date.now(); waitWord = word;
     clearInterval(timer); timer = setInterval(tick, 1000); tick();
-    app.postMessage({action: 'ask', id: ++askId, prompt: text});
+    return ++askId;
+  }
+  function openAI(title, sub, text) {
+    app.postMessage({action: 'ask', id: openPanel('✦ Claude', title, sub, 'Claude is thinking', 'Thinking', text), prompt: text});
   }
   function ask(n, p, v) {
     const text = itemPrompt(n, p, v);
@@ -537,6 +550,41 @@ ${rules}`;
     }
   };
   $('ai-close').onclick = closeAI;
+
+  // Previews: Quick Look in the app (photos, videos, PDF, Office, text…), archives listed in the side panel
+  const previewPaths = paths => app ? app.postMessage({action: 'preview', paths})
+    : copy('qlmanage -p ' + paths.map(quote).join(' ') + ' >/dev/null 2>&1', 'Quick Look command copied: paste it in Terminal');
+  const openFile = p => app ? app.postMessage({action: 'open', path: p}) : copy('open ' + quote(p), 'Command copied: paste it in Terminal');
+  const isArchive = it => !isDir(it.n) && ARCHIVE.test(it.p);
+  let archiveSize = 0;
+  function showArchive(it) {
+    if (!app) return copy('tar -tvf ' + quote(it.p), 'Command copied: paste it in Terminal');
+    archiveSize = it.v;
+    app.postMessage({action: 'archive', id: openPanel('Archive', label(it.n), `${tilde(it.p)} · ${fmt(it.v)}`, 'Reading the archive', 'Reading'), path: it.p});
+  }
+  // Called by the macOS app with the archive's files, biggest first
+  window.evictArchive = (id, res) => {
+    if (id !== askId || $('ai').hidden) return;
+    clearInterval(timer);
+    const b = $('ai-body');
+    if (res.error) {
+      b.innerHTML = `<p class="a-err">${esc(res.error)}</p>`;
+      $('ai-status').textContent = 'Unreadable';
+      return;
+    }
+    $('ai-status').textContent = `Read in ${secs()} s`;
+    const lines = res.entries.map(([name, size]) => { const r = el('div', 'ar-row'); r.title = name; r.append(el('span', '', name), el('b', '', fmt(size))); return r });
+    b.replaceChildren(el('p', 'ar-sum', `${nf(res.count, 0)} file${res.count === 1 ? '' : 's'}, ${fmt(res.total)} once extracted, in a ${fmt(archiveSize)} archive`), ...lines);
+    if (res.count > res.entries.length) b.append(el('p', 'ar-sum', `…and ${nf(res.count - res.entries.length, 0)} smaller files`));
+  };
+  // Space, like in the Finder: the selection, or the item under the mouse
+  let listHover = null;
+  function spacePreview() {
+    const sel = picks().map(([p]) => p), it = $('list').hidden ? hovered : listHover;
+    if (sel.length) return previewPaths(sel);
+    if (!it?.p) return;
+    isArchive(it) ? showArchive(it) : previewPaths([it.p]);
+  }
   // A path in the answer opens it in Evict: the folder itself, or a file pointed out in its folder
   $('ai-body').addEventListener('click', e => {
     const c = e.target.closest('code.path');
@@ -660,7 +708,7 @@ ${rules}`;
     dot.style.background = CATS[it.cat][1];
     meta.append(dot, `${fmt(it.v)} · ${nf(it.v / viewSize * 100, 1)}% · ${CATS[it.cat][0]}`);
     tip.replaceChildren(el('div', 't-name', it.title || label(it.n)), meta);
-    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', (isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions') + (canRm(it.p) ? ' · ⌘-click: select' : '')));
+    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', (isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions · Space: preview') + (canRm(it.p) ? ' · ⌘-click: select' : '')));
     tipW = tip.offsetWidth; tipH = tip.offsetHeight;
     tip.classList.add('on');
   }
@@ -689,6 +737,7 @@ ${rules}`;
   function openMenu(it, e) {
     const items = [];
     if (isDir(it.n)) items.push(menuItem('Open', () => go(it.p)));
+    else items.push(isArchive(it) ? menuItem('Show contents', () => showArchive(it)) : menuItem('Preview', () => previewPaths([it.p])), menuItem('Open with default app', () => openFile(it.p)));
     if (selectable(it)) items.push(menuItem(selected.has(it.p) ? 'Deselect' : 'Select', () => { pick(it); syncSel() }));
     items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem(claude ? '✦ Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(it.n, it.p, it.v)), menuItem('Hide', () => setMask(it.p, true)), el('hr'));
     items.push(canRm(it.p) ? menuItem(app ? 'Delete…' : 'Copy rm -rf command', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Protected path: deletion disabled'));
@@ -891,6 +940,7 @@ ${rules}`;
     showMenu('Selection', 'Click an item to deselect it', [...selected].sort((a, b) => b[1] - a[1])
       .map(([p, v]) => menuItem(`${tilde(p)} · ${fmt(v)}`, () => { selected.delete(p); syncSel() })), r.left - 14, r.top - 14);
   };
+  $('sel-preview').onclick = () => previewPaths(picks().map(([p]) => p));
   $('sel-finder').onclick = () => app ? app.postMessage({action: 'reveal', paths: picks().map(([p]) => p)})
     : copy('open -R ' + picks().map(([p]) => quote(p)).join(' '), 'Command copied: paste it in Terminal');
   $('sel-rm').textContent = app ? 'Delete…' : 'Copy rm -rf';
@@ -989,6 +1039,7 @@ ${rules}`;
     renderList(); applyFocus(); syncSel();
     $('list').scrollTop = top;
   });
+  $('list').addEventListener('mouseover', e => { listHover = rowAt(e) });
   $('list').addEventListener('contextmenu', e => { const it = rowAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
   for (const b of $('views').children) b.onclick = () => {
     view = b.dataset.v;
@@ -1021,7 +1072,8 @@ ${rules}`;
       if (e.key === 'Escape') { $('q').value = ''; $('q').blur(); hideExts(); render(false) }
       return;
     }
-    if (e.key === '/') { e.preventDefault(); $('q').focus() }
+    if (e.key === ' ' && !e.target.closest?.('button')) { e.preventDefault(); spacePreview() }
+    else if (e.key === '/') { e.preventDefault(); $('q').focus() }
     else if (e.key === 'Escape' && !$('menu').hidden) closeMenu();
     else if (e.key === 'Escape' && selected.size) { selected.clear(); syncSel() }
     else if ((e.key === 'Backspace' || e.key === 'Escape') && stack.length > 1) { e.preventDefault(); go(pathOf(stack.slice(0, -1))) }

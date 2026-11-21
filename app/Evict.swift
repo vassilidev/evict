@@ -1,3 +1,4 @@
+import Quartz
 import SwiftUI
 import WebKit
 
@@ -324,7 +325,7 @@ final class Model: ObservableObject {
         return path.hasPrefix("/") && FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }()
 
-    private var asking: Process?
+    private var running: Process?
 
     // Streams Claude's answer into the page as it's written; a new question or closing the panel stops the previous one
     func ask(id: Int, prompt: String) {
@@ -341,7 +342,7 @@ final class Model: ObservableObject {
         process.standardOutput = out
         process.standardError = out
         do { try process.run() } catch { return answer(id, error.localizedDescription, "error") }
-        asking = process
+        running = process
         Task {
             var done = false, problem = ""
             do {
@@ -358,14 +359,53 @@ final class Model: ObservableObject {
                     }
                 }
             } catch {}
-            if asking === process { asking = nil }
+            if running === process { running = nil }
             answer(id, problem, done ? "done" : "error")
         }
     }
 
+    // Lists an archive with the system's bsdtar (zip, rar, 7z, tar.*, iso, xar, cpio…), biggest files first
+    func listArchive(id: Int, path: String) {
+        cancelAsk()
+        let process = Process(), out = Pipe(), err = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        process.arguments = ["-tvf", path]
+        process.environment = ["LC_ALL": "en_US.UTF-8"]  // names in UTF-8, not escaped
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = out
+        process.standardError = err
+        do { try process.run() } catch { return send("evictArchive", id, ["error": error.localizedDescription]) }
+        running = process
+        Task {
+            var files: [(String, Int64)] = [], total: Int64 = 0
+            do {
+                for try await line in out.fileHandleForReading.bytes.lines {
+                    // mode, links, owner, group, size, month, day, time or year, name
+                    let field = line.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: true)
+                    guard field.count == 9, !field[0].hasPrefix("d"), let size = Int64(field[4]) else { continue }
+                    files.append((String(field[8]), size))
+                    total += size
+                }
+            } catch {}
+            if running === process { running = nil }
+            guard !files.isEmpty else {
+                let message = String(decoding: err.fileHandleForReading.availableData, as: UTF8.self)
+                    .replacingOccurrences(of: "tar: ", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+                return send("evictArchive", id, ["error": message.isEmpty ? "This archive is empty." : message])
+            }
+            files.sort { $0.1 > $1.1 }
+            send("evictArchive", id, ["count": files.count, "total": total, "entries": files.prefix(500).map { [$0.0, $0.1] }])
+        }
+    }
+
+    private func send(_ function: String, _ id: Int, _ payload: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let arg = String(data: data, encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("\(function)(\(id), \(arg))")
+    }
+
     func cancelAsk() {
-        asking?.terminate()
-        asking = nil
+        running?.terminate()
+        running = nil
     }
 
     private func answer(_ id: Int, _ text: String, _ kind: String) {
@@ -482,7 +522,7 @@ struct WebView: NSViewRepresentable {
         config.userContentController.add(context.coordinator, name: "evict")
         let flags = "window.evictClaude = \(Model.claude != nil); window.evictLang = '\(Locale.preferredLanguages.first ?? "en")';"
         config.userContentController.addUserScript(WKUserScript(source: flags, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        let view = WKWebView(frame: .zero, configuration: config)
+        let view = EvictWebView(frame: .zero, configuration: config)
         view.setValue(false, forKey: "drawsBackground")  // no white flash before the page paints
         model.webView = view
         view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
@@ -490,6 +530,26 @@ struct WebView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {}
+}
+
+// Quick Look: while it's the first responder, the web view feeds the shared preview panel
+final class EvictWebView: WKWebView, QLPreviewPanelDataSource {
+    private var items: [URL] = []
+
+    func preview(_ urls: [URL]) {
+        items = urls
+        window?.makeFirstResponder(self)
+        guard let panel = QLPreviewPanel.shared() else { return }
+        panel.updateController()
+        panel.reloadData()
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool { true }
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) { panel.dataSource = self }
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) { panel.dataSource = nil }
+    func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int { items.count }
+    func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> QLPreviewItem! { items[index] as NSURL }
 }
 
 final class Bridge: NSObject, WKScriptMessageHandler {
@@ -510,6 +570,15 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             case "delete":
                 guard let path = body["path"] as? String else { return }
                 model.confirmDelete([(path, (body["size"] as? NSNumber)?.int64Value ?? 0)])
+            case "preview":
+                guard let paths = body["paths"] as? [String], !paths.isEmpty else { return }
+                (model.webView as? EvictWebView)?.preview(paths.map { URL(fileURLWithPath: $0) })
+            case "open":
+                guard let path = body["path"] as? String else { return }
+                NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            case "archive":
+                guard let id = body["id"] as? Int, let path = body["path"] as? String else { return }
+                model.listArchive(id: id, path: path)
             case "deleteMany":
                 guard let items = body["items"] as? [[Any]] else { return }
                 model.confirmDelete(items.compactMap { item in

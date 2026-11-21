@@ -48,6 +48,7 @@
   - 🟪 **media**, 🟦 **apps**, 🟩 **data**, ⬛ **system**
 
   Click a category to highlight it.
+- **Preview anything**: press `Space` on a file, like in the Finder. Quick Look opens photos, videos, PDFs, Office and iWork documents, text, CSV, code and audio; with a selection, the arrows go from one item to the next. **Show contents** lists what's inside zip, rar, 7z, tar.gz, iso and other archives, biggest files first, and **Open with default app** opens the file.
 - **Select many, delete once**: checkboxes in the list and in search results, `⌘`-click on the map, `Shift`-click for a range, **Select all** on a search (`.mov`, `node_modules`…). The selection stays while you search and browse; a bar shows its total size, lets you review it, show it in Finder or delete it all at once.
 - **Built-in cleanup** (app): move to Trash, delete permanently or empty the Trash. The administrator password is only asked for when needed, and system paths are protected.
 - **Show in Finder** for any file or folder.
@@ -92,7 +93,7 @@ cd evict
 ./evict ~/Projects   # a single folder
 ```
 
-In the browser, a web page can't delete files, drive Finder or run Claude Code, so the menu copies text instead: **Copy rm -rf command**, an `open -R` command for **Show in Finder**, and the prompt for **Copy AI prompt**.
+In the browser, a web page can't delete files, drive Finder or run Claude Code, so the menu copies text instead: **Copy rm -rf command**, an `open -R` command for **Show in Finder**, `qlmanage -p` for **Preview**, `tar -tvf` for **Show contents**, and the prompt for **Copy AI prompt**.
 
 ## Usage
 
@@ -105,6 +106,7 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | `⌘F` or `/` | Search files and folders · `Esc` clears |
 | Checkbox · `⌘`-click · `Shift`-click · `⌘A` | Select · add to the selection · select a range · select every row shown |
 | `Esc` with a selection | Clear the selection |
+| `Space` | Preview the item under the mouse, or the selection (Quick Look); archives show their contents |
 | `.mov .mp4` in the search field | Filter by extension |
 | **Trash** / **Downloads** | Open them · **Empty Trash…** when you're in the Trash |
 | **Ask Claude** / **Copy AI prompt** | Ask what the current folder is |
@@ -152,7 +154,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.6.0 && git push origin v1.6.0
+git tag v1.7.0 && git push origin v1.7.0
 ```
 
 ## Known limitations
