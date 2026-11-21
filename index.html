@@ -32,10 +32,13 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
 #q{font:inherit;font-size:12.5px;width:240px;flex-shrink:0;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:5px 10px;outline:none;transition:border-color .15s}
 #q:focus{border-color:#5b6476}
 #q::placeholder{color:#6b7383}
-#progress{flex:1;height:6px;border-radius:3px;background:#1a1e26;overflow:hidden}
-#progress i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--accent),#e0921f);transition:width .5s ease}
-body.live #legend,body.live .acts,body.live #views,body.live #places,body.live #q{display:none}
-.lbox{transition:left .45s cubic-bezier(.2,.8,.2,1),top .45s cubic-bezier(.2,.8,.2,1),width .45s cubic-bezier(.2,.8,.2,1),height .45s cubic-bezier(.2,.8,.2,1),background-color .45s,opacity .2s}
+body.live .bottom,body.live #places,body.live #q{display:none}
+/* Scan loader: only opacity and transform animate, so it costs the scan nothing */
+.stage{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:22px}
+.frame{position:relative;width:440px;height:270px}
+.frame i{position:absolute;border-radius:4px;opacity:0;animation:pop ease both}
+@keyframes pop{0%{opacity:0;transform:scale(.6)}18%{opacity:1;transform:none}85%{opacity:1;transform:none}100%{opacity:0;transform:scale(.97)}}
+.stage-info{color:var(--mut);font-variant-numeric:tabular-nums}
 #places{display:flex;gap:6px;flex-shrink:0}
 .place{display:flex;align-items:center;gap:6px;color:#c7ccd6}
 .place svg{width:13px;height:13px;flex-shrink:0}
@@ -162,7 +165,7 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 
 @media (max-width:1150px){#stats{display:none}}
 @media (max-width:760px){.bottom{flex-wrap:wrap}#q{width:150px}}
-@media (prefers-reduced-motion:reduce){.lbox,#progress i,.box,.ring,.row,.tw,#tip,#toast{transition:none}.found,#ai,.sk,#selbar{animation:none}}
+@media (prefers-reduced-motion:reduce){.frame i{animation:none;opacity:1}.box,.ring,.row,.tw,#tip,#toast{transition:none}.found,#ai,.sk,#selbar{animation:none}}
 </style>
 </head>
 <body>
@@ -177,7 +180,6 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
   <div class="bottom">
     <div class="seg" id="views"><button data-v="map">Map</button><button data-v="list">List</button></div>
     <div id="legend"></div>
-    <div id="progress" hidden><i></i></div>
     <div class="acts">
       <button id="masked" hidden></button>
       <button id="cur-wins" class="ai"></button>
@@ -338,63 +340,25 @@ function squarify(items, x, y, w, h) {
   return out;
 }
 
-// While the app scans, the scanner streams the size of the biggest folders: their blocks appear and grow live
+// While the app scans: blocks that build up and dissolve in a loop (decorative), and the real item count
 function live() {
-  const map = $('map'), shown = new Map(), base = window.LIVE.root;
-  const name = p => p.slice(p.lastIndexOf('/') + 1);
-  const color = p => SYS.test(p) ? CATS.sys[1] : JUNK.test(name(p)) ? CATS.junk[1] : /\.app$|^\/Applications(\/|$)/.test(p) ? CATS.app[1] : '#3a4152';
+  const base = window.LIVE.root, frame = el('div', 'frame'), info = el('div', 'stage-info', 'Starting…'), stage = el('div', 'stage');
+  const colors = ['junk', 'arch', 'media', 'app', 'data', 'sys', 'misc'].map(c => CATS[c][1]), cycle = 2600;
   document.body.classList.add('live');
   $('crumbs').textContent = base === '/' ? 'Scanning Macintosh HD…' : `Scanning ${base}…`;
-  $('stats').textContent = 'Starting…';
-  $('progress').hidden = false;
-  function put(key, x, y, w, h, group, title, v) {
-    let b = shown.get(key);
-    const fresh = !b;
-    if (fresh) { b = el('div'); map.append(b); shown.set(key, b) }
-    b.seen = true;
-    b.className = 'box lbox' + (group ? ' group' : '');
-    b.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${h}px` + (group ? '' : `;background:${color(key)}`);
-    b.replaceChildren();
-    if (group) {
-      const hd = el('div', 'hd');
-      hd.append(el('span', '', title), el('b', '', fmt(v)));
-      b.append(hd);
-    } else if (w > 40 && h > 22) {
-      const fs = Math.max(9, Math.min(36, Math.sqrt(w * h) / 7, h / 2.6)), t = el('div', 'nm', title);
-      t.style.fontSize = fs + 'px';
-      b.append(t);
-      if (h > fs * 2 + 10) { const sz = el('div', 'sz', fmt(v)); sz.style.fontSize = Math.max(9, fs * .78) + 'px'; b.append(sz) }
-    }
-    if (fresh) b.animate([{opacity: 0, transform: 'scale(.9)'}, {opacity: 1, transform: 'none'}], {duration: 450, easing: 'cubic-bezier(.2,.8,.2,1)'});
+  stage.append(frame, info);
+  $('map').append(stage);
+  function build() {
+    const items = Array.from({length: 7 + Math.random() * 8 | 0}, () => ({v: Math.random() ** 2 + .05})).sort((a, b) => b.v - a.v);
+    frame.replaceChildren(...squarify(items, 0, 0, 440, 270).map(([, x, y, w, h], i) => {
+      const b = el('i'), delay = i * 90;
+      b.style.cssText = `left:${x + 1}px;top:${y + 1}px;width:${w - 2}px;height:${h - 2}px;background:${colors[Math.random() * colors.length | 0]};animation-delay:${delay}ms;animation-duration:${cycle - delay}ms`;
+      return b;
+    }));
   }
-  // Same nesting as the final map: a folder holding one big folder shares its header ("USERS › ME")
-  function lay(items, x, y, w, h, depth) {
-    for (const [it, bx, by, bw, bh] of squarify(items, x, y, w, h)) {
-      if (!it.p) continue;  // bytes not attributed to a listed folder yet
-      const x0 = Math.round(bx), y0 = Math.round(by), w0 = Math.round(bx + bw) - x0 - 1, h0 = Math.round(by + bh) - y0 - 1;
-      if (w0 < 2 || h0 < 2) continue;
-      let node = it, title = name(it.p);
-      while (node.kids.length === 1 && node.kids[0].kids.length && node.kids[0].v > node.v * .9) { node = node.kids[0]; title += ' › ' + name(node.p) }
-      const group = node.kids.length > 0 && w0 > 90 && h0 > 50 && depth < 3;
-      put(it.p, x0, y0, w0, h0, group, title, it.v);
-      if (!group) continue;
-      const kids = node.kids.sort((a, b) => b.v - a.v), rest = node.v - kids.reduce((sum, k) => sum + k.v, 0);
-      lay(rest > 0 ? [...kids, {p: null, v: rest}] : kids, x0 + 2, y0 + 17, w0 - 4, h0 - 19, depth + 1);
-    }
-  }
-  window.evictLive = snap => {
-    // APFS clones are counted at full size, so the count can pass the space macOS reports as used
-    $('stats').textContent = `${nf(snap.count, 0)} items · ${fmt(snap.bytes)} counted`;
-    $('progress').firstChild.style.width = Math.min(99, snap.bytes / (snap.used || 1) * 100) + '%';
-    const nodes = new Map(snap.dirs.map(([p, v]) => [p, {p, v, kids: []}])), top = [];
-    for (const it of nodes.values()) {
-      const parent = it.p.slice(0, it.p.lastIndexOf('/')) || '/';
-      if (parent === base) top.push(it); else nodes.get(parent)?.kids.push(it);
-    }
-    for (const b of shown.values()) b.seen = false;
-    lay(top.sort((a, b) => b.v - a.v), 0, 0, map.clientWidth, map.clientHeight, 0);
-    for (const [key, b] of shown) if (!b.seen) { b.remove(); shown.delete(key) }
-  };
+  build();
+  setInterval(build, cycle);
+  window.evictLive = snap => { info.textContent = `${nf(snap.count, 0)} items · ${fmt(snap.bytes)}` };
 }
 if (!D && window.LIVE) live();
 
