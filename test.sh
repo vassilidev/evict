@@ -15,4 +15,4 @@ got=$(printf '%s' "$json" | sed -E 's/.*"tree":\["[^"]*",([0-9]+).*/\1/')
 want=$(( $(du -sk "$t/f" | cut -f1) * 1024 ))
 printf '%s' "$json" | grep -qE '\["(big|hardlink)",' || { echo "FAIL: big file missing"; exit 1; }
 [ "$got" = "$want" ] || { echo "FAIL: scan=$got du=$want"; exit 1; }
-echo "OK ($got octets, identique à du)"
+echo "OK ($got bytes, same as du)"

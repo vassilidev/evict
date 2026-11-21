@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -84,8 +84,9 @@ header{display:grid;gap:10px;padding:12px 14px 10px}
     <div id="legend"></div>
     <div class="acts">
       <button id="masked" hidden></button>
-      <button id="cur-cp">Copier le chemin</button>
-      <button id="cur-rm" class="danger">Copier rm -rf</button>
+      <button id="cur-finder">Show in Finder</button>
+      <button id="cur-cp">Copy path</button>
+      <button id="cur-rm" class="danger">Copy rm -rf</button>
     </div>
   </div>
 </header>
@@ -98,26 +99,26 @@ window.DATA = null; /* __DATA__ */
 </script>
 <script>
 const D = window.DATA, $ = id => document.getElementById(id);
-if (!D) document.body.innerHTML = '<p id="empty">Pas de données : lance <code>./evict</code> pour scanner le disque et générer cette page.</p>';
+if (!D) document.body.innerHTML = '<p id="empty">No data: run <code>./evict</code> to scan the disk and generate this page.</p>';
 
 const CATS = {
-  junk:   ['Régénérable', '#e0473d'],
-  arch:   ['Archives & disques', '#e0921f'],
-  media:  ['Médias', '#9061f0'],
+  junk:   ['Regenerable', '#e0473d'],
+  arch:   ['Archives & disk images', '#e0921f'],
+  media:  ['Media', '#9061f0'],
   app:    ['Applications', '#3d7fe6'],
-  data:   ['Données', '#2ea36b'],
-  sys:    ['Système', '#5f6675'],
-  misc:   ['Petits fichiers', '#394050'],
+  data:   ['Data', '#2ea36b'],
+  sys:    ['System', '#5f6675'],
+  misc:   ['Small files', '#394050'],
   hidden: ['Invisible', '#2a2e37'],
-  free:   ['Libre', '#1d2129'],
+  free:   ['Free', '#1d2129'],
 };
 const JUNK = /^(node_modules|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
 const ARCH = /\.(zip|dmg|iso|pkg|tar|gz|tgz|bz2|xz|7z|rar|xip|raw|img|qcow2|vmdk|vdi|ipsw|sparseimage|sparsebundle|bak)$/i;
 const MEDIA = /\.(mov|mp4|m4v|mkv|avi|webm|jpe?g|png|heic|gif|tiff?|psd|cr2|nef|arw|dng|mp3|wav|aiff?|flac|m4a|aac|photoslibrary|fcpbundle|imovielibrary|logicx|band)$/i;
 const SYS = /^\/(System|private|usr|bin|sbin|cores)(\/|$)/;
 
-const nf = (v, d) => new Intl.NumberFormat('fr-FR', {maximumFractionDigits: d}).format(v);
-const fmt = b => { const u = ['o', 'Ko', 'Mo', 'Go', 'To']; let i = 0; while (b >= 1000 && i < 4) { b /= 1000; i++ } return nf(b, i && b < 10 ? 1 : 0) + ' ' + u[i] };
+const nf = (v, d) => new Intl.NumberFormat('en-US', {maximumFractionDigits: d}).format(v);
+const fmt = b => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (b >= 1000 && i < 4) { b /= 1000; i++ } return nf(b, i && b < 10 ? 1 : 0) + ' ' + u[i] };
 const isDir = n => n[0] !== null && Array.isArray(n[2]);
 const join = (p, name) => p === '/' ? '/' + name : p + '/' + name;
 const kidPath = (p, k) => k[0] === null || k.cat ? null : join(p, k[0]);
@@ -125,7 +126,7 @@ const quote = p => "'" + p.replace(/'/g, "'\\''") + "'";
 // Never offer rm on the disk root, top-level folders, home folders or macOS system paths
 const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !/^\/Users\/[^/]+(\/Library)?$/.test(p);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
-const label = n => n[0] ?? `${nf(n[2], 0)} autres éléments`;
+const label = n => n[0] ?? `${nf(n[2], 0)} other items`;
 
 function catOf(n, p) {
   if (n.cat) return n.cat;
@@ -171,16 +172,16 @@ if (D) {
   // Inside the macOS app, deletion and clipboard go through the native bridge
   const app = window.webkit?.messageHandlers?.evict;
   const stats = () => {
-    $('stats').textContent = (isDisk ? `${fmt(D.total - D.free)} utilisés · ${fmt(D.free)} libres · ` : `${fmt(root[1])} · `)
-      + `${nf(D.count, 0)} éléments en ${nf(D.secs, 1)} s`;
+    $('stats').textContent = (isDisk ? `${fmt(D.total - D.free)} used · ${fmt(D.free)} free · ` : `${fmt(root[1])} · `)
+      + `${nf(D.count, 0)} items in ${nf(D.secs, 1)} s`;
   };
   stats();
-  $('stats').title = `Scan du ${D.date}`;
+  $('stats').title = `Scanned on ${D.date}`;
 
-  const free = Object.assign(['Espace libre', D.free], {cat: 'free'}), extra = [];
+  const free = Object.assign(['Free space', D.free], {cat: 'free'}), extra = [];
   if (isDisk) {
     const hidden = D.total - D.free - root[1];
-    if (hidden > 0) extra.push(Object.assign(['Invisible au scan (snapshots, fichiers protégés)', hidden], {cat: 'hidden'}));
+    if (hidden > 0) extra.push(Object.assign(['Not visible to the scan (snapshots, protected files)', hidden], {cat: 'hidden'}));
     extra.push(free);
   }
 
@@ -234,15 +235,23 @@ if (D) {
     $('toast').textContent = msg; $('toast').classList.add('on');
     clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('on'), 1600);
   }
-  async function copy(text, msg) {
+  // Synchronous copy first: the async Clipboard API can stay pending forever on file:// pages
+  function copy(text, msg) {
     if (app) app.postMessage({action: 'copy', text});
-    else try { await navigator.clipboard.writeText(text) }
-    catch { const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove() }
+    else {
+      const t = el('textarea');
+      t.value = text; t.style.cssText = 'position:fixed;opacity:0';
+      document.body.append(t); t.select();
+      const ok = document.execCommand('copy');
+      t.remove();
+      if (!ok) navigator.clipboard?.writeText(text).catch(() => {});
+    }
     toast(msg);
   }
-  const copyPath = p => copy(p, 'Chemin copié');
-  const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'Commande rm copiée');
-  if (app) $('cur-rm').textContent = 'Supprimer ce dossier…';
+  const copyPath = p => copy(p, 'Path copied');
+  const reveal = p => app ? app.postMessage({action: 'reveal', path: p}) : copy('open -R ' + quote(p), 'Command copied: paste it in Terminal');
+  const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'rm command copied');
+  if (app) $('cur-rm').textContent = 'Delete this folder…';
 
   // Called by the macOS app once a path has been deleted (freed = true) or moved to the Trash
   window.evictRemoved = (path, freed) => {
@@ -254,7 +263,7 @@ if (D) {
     for (const n of s) n[1] -= size;
     resetMemo();
     if (freed) { D.free += size; free[1] = D.free; stats() }
-    toast(freed ? `${fmt(size)} libérés` : `${fmt(size)} mis à la corbeille`);
+    toast(freed ? `${fmt(size)} freed` : `${fmt(size)} moved to the Trash`);
     if (curPath === path || curPath.startsWith(path + '/')) go(parentPath); else render(false);
   };
 
@@ -283,9 +292,9 @@ if (D) {
     if (!it) { tip.classList.remove('on'); return }
     const meta = el('div', 't-meta'), dot = el('i');
     dot.style.background = CATS[it.cat][1];
-    meta.append(dot, `${fmt(it.v)} · ${nf(it.v / viewSize * 100, 1)} % · ${CATS[it.cat][0]}`);
+    meta.append(dot, `${fmt(it.v)} · ${nf(it.v / viewSize * 100, 1)}% · ${CATS[it.cat][0]}`);
     tip.replaceChildren(el('div', 't-name', it.title || label(it.n)), meta);
-    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', isDir(it.n) ? 'Clic : ouvrir · Clic droit : actions' : 'Clic : actions'));
+    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions'));
     tipW = tip.offsetWidth; tipH = tip.offsetHeight;
     tip.classList.add('on');
   }
@@ -313,9 +322,9 @@ if (D) {
   }
   function openMenu(it, e) {
     const items = [];
-    if (isDir(it.n)) items.push(menuItem('Ouvrir', () => go(it.p)));
-    items.push(menuItem('Copier le chemin', () => copyPath(it.p)), menuItem('Masquer de la carte', () => setMask(it.p, true)), el('hr'));
-    items.push(canRm(it.p) ? menuItem(app ? 'Supprimer…' : 'Copier la commande rm -rf', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Chemin protégé : suppression désactivée'));
+    if (isDir(it.n)) items.push(menuItem('Open', () => go(it.p)));
+    items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem('Hide from map', () => setMask(it.p, true)), el('hr'));
+    items.push(canRm(it.p) ? menuItem(app ? 'Delete…' : 'Copy rm -rf command', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Protected path: deletion disabled'));
     showMenu(label(it.n), fmt(it.v), items, e.clientX - 14, e.clientY - 14);
   }
   const closeMenu = () => { $('menu').hidden = true };
@@ -378,12 +387,12 @@ if (D) {
       const b = el('button', focusCat === c ? 'on' : ''), i = el('i');
       i.style.background = CATS[c][1];
       b.append(i, `${CATS[c][0]} · ${fmt(m[c])}`);
-      b.title = focusCat === c ? 'Tout afficher' : 'Mettre en évidence';
+      b.title = focusCat === c ? 'Show all' : 'Highlight';
       b.onclick = () => { focusCat = focusCat === c ? null : c; renderLegend(); applyFocus() };
       return b;
     }));
     $('masked').hidden = !masked.size;
-    $('masked').textContent = `${masked.size} masqué${masked.size > 1 ? 's' : ''}`;
+    $('masked').textContent = `${masked.size} hidden`;
   }
   function applyFocus() {
     for (const b of $('map').children) b.classList.toggle('dim', !!focusCat && !b.classList.contains('group') && b.dataset.c !== focusCat);
@@ -400,6 +409,7 @@ if (D) {
       return i ? [el('i', '', '›'), a] : [a];
     }));
     $('cur-cp').onclick = () => copyPath(curPath);
+    $('cur-finder').onclick = () => reveal(curPath);
     $('cur-rm').hidden = !canRm(curPath);
     $('cur-rm').onclick = () => remove(curPath, cur[1]);
 
@@ -435,7 +445,7 @@ if (D) {
   $('map').addEventListener('contextmenu', e => { const it = boxAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
   $('masked').onclick = e => {
     const r = e.currentTarget.getBoundingClientRect();
-    showMenu('Masqués de la carte', 'Cliquer pour réafficher', [...[...masked].map(p => menuItem(p, () => setMask(p, false))), el('hr'), menuItem('Tout réafficher', () => setMask(null, false))], r.left - 14, r.bottom - 6);
+    showMenu('Hidden from the map', 'Click to show again', [...[...masked].map(p => menuItem(p, () => setMask(p, false))), el('hr'), menuItem('Show all', () => setMask(null, false))], r.left - 14, r.bottom - 6);
   };
   document.addEventListener('mousedown', e => { if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target)) closeMenu() });
   addEventListener('keydown', e => {

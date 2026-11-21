@@ -5,48 +5,68 @@
 <h1 align="center">Evict</h1>
 
 <p align="center">
-  <b>Le videur de ton disque.</b><br>
-  Evict scanne <i>tout</i> ton Mac en quelques secondes et te montre, en boîtes proportionnelles,<br>
-  ce qui prend vraiment la place. Tu cliques, tu descends dans les dossiers, tu fais le ménage.
+  <b>The bouncer for your disk.</b><br>
+  Evict scans your <i>entire</i> Mac in seconds and shows, as proportional boxes,<br>
+  what is really taking up space. Click, drill down, clean up.
 </p>
 
 <p align="center">
-  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-111?logo=apple">
-  <img alt="C + SwiftUI" src="https://img.shields.io/badge/C%20%2B%20SwiftUI-natif-e0473d">
-  <img alt="0 dépendance" src="https://img.shields.io/badge/d%C3%A9pendances-0-2ea36b">
-  <img alt="100% local" src="https://img.shields.io/badge/100%25-local%2C%20sans%20IA-3d7fe6">
-  <img alt="Licence MIT" src="https://img.shields.io/badge/licence-MIT-8b93a1">
+  <a href="https://vassilidev.github.io/evict/"><b>Website</b></a> ·
+  <a href="https://github.com/vassilidev/evict/releases/latest/download/Evict.dmg"><b>Download</b></a> ·
+  <a href="https://github.com/vassilidev/evict/releases">Releases</a>
 </p>
 
-![Evict : carte du disque en boîtes](docs/screenshot.png)
-<p align="center"><sub>Capture réalisée sur un disque fictif.</sub></p>
+<p align="center">
+  <a href="https://github.com/vassilidev/evict/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/vassilidev/evict/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-111?logo=apple">
+  <img alt="C + SwiftUI" src="https://img.shields.io/badge/C%20%2B%20SwiftUI-native-e0473d">
+  <img alt="Zero dependencies" src="https://img.shields.io/badge/dependencies-0-2ea36b">
+  <img alt="100% local" src="https://img.shields.io/badge/100%25-local%2C%20no%20AI-3d7fe6">
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8b93a1">
+</p>
 
-## Ce que fait Evict
+![Evict: the disk as a treemap of proportional boxes](docs/screenshot.png)
+<p align="center"><sub>Screenshot taken on a fictional disk.</sub></p>
 
-- **Tout le disque, très vite** : 5,7 millions de fichiers (426 Go) en 20 s sur un Mac mini M4 Pro, et 27 s à froid, juste après un redémarrage.
-- **Une carte en boîtes** (treemap), façon finviz : la surface de chaque boîte est proportionnelle à la place occupée. Clic pour entrer dans un dossier, fil d'Ariane pour remonter.
-- **Des couleurs qui parlent** :
-  - 🟥 **régénérable** : caches, `node_modules`, DerivedData, builds, `.venv`…
-  - 🟧 **archives et images disque** : zip, dmg, iso, images de VM…
-  - 🟪 **médias**, 🟦 **applications**, 🟩 **données**, ⬛ **système**
+## What Evict does
 
-  Un clic sur une catégorie la met en évidence.
-- **Suppression intégrée** (app) : mise à la corbeille ou suppression définitive. Le mot de passe administrateur n'est demandé que si c'est nécessaire, et les chemins système sont protégés.
-- **Masquer un dossier** (par exemple `System`) pour laisser plus de place au reste. Le choix est mémorisé entre les scans.
-- **100 % local** : sans IA, sans télémétrie, sans dépendance. Juste un scanner en C et une page HTML.
+- **The whole disk, fast**: 5.7 million files (426 GB) in 20 s on a Mac mini M4 Pro, and 27 s cold, right after a reboot.
+- **A treemap**, finviz-style: each box's area is proportional to the space it takes. Click to drill into a folder, use the breadcrumb to go back up.
+- **Colors that tell you something**:
+  - 🟥 **regenerable**: caches, `node_modules`, DerivedData, builds, `.venv`…
+  - 🟧 **archives and disk images**: zip, dmg, iso, VM images…
+  - 🟪 **media**, 🟦 **apps**, 🟩 **data**, ⬛ **system**
 
-## Installation
+  Click a category to highlight it.
+- **Built-in cleanup** (app): move to Trash or delete permanently. The administrator password is only asked for when needed, and system paths are protected.
+- **Show in Finder** for any file or folder.
+- **Hide a folder** (`System`, for example) to give the rest more room. The choice is remembered across scans.
+- **Built-in updates**: Evict checks GitHub for new versions and installs them in one click.
+- **100% local**: your files never leave your Mac. No AI, no telemetry, no dependencies, just a C scanner and an HTML page. The only network request is the update check against GitHub.
 
-### Télécharger
+## Install
 
-**[⬇ Télécharger Evict.dmg](https://github.com/vassilidev/evict/releases/latest/download/Evict.dmg)** (macOS 13+, Apple Silicon et Intel). Ouvre le DMG, puis glisse Evict dans Applications.
+### Download
 
-> Evict n'est pas notarisé par Apple, car il faudrait un compte développeur payant. Au premier lancement, macOS refuse donc de l'ouvrir. Va dans **Réglages Système → Confidentialité et sécurité** et clique sur **« Ouvrir quand même »**. Une seule fois suffit.
-> En terminal, cette commande fait la même chose : `xattr -dr com.apple.quarantine /Applications/Evict.app`
+**[⬇ Download Evict.dmg](https://github.com/vassilidev/evict/releases/latest/download/Evict.dmg)** (macOS 13+, Apple Silicon and Intel). Open the DMG, then drag Evict into Applications.
 
-### Compiler soi-même
+> Evict is not notarized by Apple, since that needs a paid developer account. macOS therefore blocks the first launch. Go to **System Settings → Privacy & Security** and click **Open Anyway**. You only need to do this once.
+> From a terminal, this does the same: `xattr -dr com.apple.quarantine /Applications/Evict.app`
 
-Prérequis : macOS 13 ou plus récent, et les outils de développement d'Apple (`xcode-select --install`).
+> **On first launch**, Evict asks for **Full Disk Access**. Without it, macOS interrupts the scan with one permission prompt per protected folder (Desktop, Documents, other apps' data…). Click **Open System Settings**, turn Evict on, and the scan starts by itself. **Scan Anyway** is still available.
+> Evict has no Apple signature, so macOS asks for this access again after each update.
+
+### Updates
+
+Evict checks for new versions at launch and shows an **Update** button in the toolbar when one is available. You can also use **Evict → Check for Updates…** in the menu bar, or update from a terminal:
+
+```sh
+/Applications/Evict.app/Contents/MacOS/Evict --update
+```
+
+### Build from source
+
+Requirements: macOS 13 or later, and Apple's command line tools (`xcode-select --install`).
 
 ```sh
 git clone https://github.com/vassilidev/evict.git
@@ -54,73 +74,78 @@ cd evict
 ./install.sh
 ```
 
-`install.sh` compile Evict.app, l'installe dans `/Applications` (ou `~/Applications`) puis l'ouvre. Ensuite, lance Evict depuis Spotlight quand tu veux, et utilise **⌘R** pour rescanner.
+`install.sh` builds Evict.app, installs it in `/Applications` (or `~/Applications`), then opens it. After that, launch Evict from Spotlight whenever you like, and press **⌘R** to rescan.
 
-> **Au premier lancement**, Evict demande l'**Accès complet au disque**. Sans lui, macOS interrompt le scan avec une fenêtre d'autorisation par dossier protégé (Bureau, Documents, données des autres apps…). Clique sur « Ouvrir les réglages », active Evict, et le scan démarre tout seul. « Scanner quand même » reste possible.
-> L'app n'a pas de signature Apple : il faut refaire cette autorisation après chaque mise à jour ou chaque `./install.sh`.
-
-### En ligne de commande
+### Command line
 
 ```sh
-./evict              # tout le disque, rapport ouvert dans le navigateur
-./evict ~/Projects   # un seul dossier
+./evict              # the whole disk, report opened in your browser
+./evict ~/Projects   # a single folder
 ```
 
-Dans le navigateur, le menu propose **Copier la commande `rm -rf`** au lieu de supprimer directement.
+In the browser, a web page can't delete files or drive Finder, so the menu copies terminal commands instead: **Copy rm -rf command**, and an `open -R` command for **Show in Finder**.
 
-## Utilisation
+## Usage
 
-| Geste | Effet |
+| Action | Result |
 | --- | --- |
-| Clic sur un dossier | Entrer dedans |
-| Clic sur un fichier · clic droit | Menu : ouvrir, copier le chemin, masquer, supprimer |
-| `⌫` ou `Échap` | Remonter d'un niveau |
-| Clic sur une catégorie | La mettre en évidence |
-| Bouton « N masqués » | Réafficher des dossiers masqués |
-| `⌘R` (app) | Rescanner |
+| Click a folder | Drill into it |
+| Click a file · right-click | Menu: open, show in Finder, copy path, hide, delete |
+| `⌫` or `Esc` | Go up one level |
+| Click a category | Highlight it |
+| "N hidden" button | Show hidden folders again |
+| `⌘R` (app) | Rescan |
 
-## Pourquoi c'est rapide
+## Why it's fast
 
-Mesuré sur le même Mac (Apple M4 Pro, SSD interne, 5,7 M d'entrées) :
+Measured on the same Mac (Apple M4 Pro, internal SSD, 5.7 M entries):
 
-| Méthode | Temps |
+| Method | Time |
 | --- | ---: |
 | Python, `os.scandir` + `lstat`, 1 thread | 153 s |
-| Première version C : chemins complets, file de travail globale, 36 threads | 41 s |
-| **Evict** : `getattrlistbulk` + `openat`, 8 threads | **20 s** (27 s à froid) |
+| First C version: full paths, global work queue, 36 threads | 41 s |
+| **Evict**: `getattrlistbulk` + `openat`, 8 threads | **20 s** (27 s cold) |
 
-1. **`getattrlistbulk(2)`** : un seul appel système renvoie le nom, le type, la taille allouée et le nombre de liens de centaines d'entrées d'un coup. Il n'y a aucun `stat()` par fichier.
-2. **`openat(parent, nom)`** : aucun chemin complet n'est jamais résolu, donc les threads ne se disputent pas les nœuds de `/` et de `/Users` dans le noyau.
-3. **Une pile locale par thread** (parcours en profondeur) : le travail n'est partagé que lorsqu'un thread est inactif.
-4. **8 threads, mesuré** : au-delà, APFS sature sur ses verrous internes. À 24 threads, le temps passé dans le noyau monte à 309 s cumulées pour aller *moins* vite.
-5. **Pas de rapatriement iCloud** : avec `IOPOL_MATERIALIZE_DATALESS_FILES_OFF`, les fichiers iCloud ou Drive non téléchargés ne sont jamais rapatriés pendant le scan.
-6. **Taille réelle sur disque** (`ATTR_FILE_ALLOCSIZE`) : les liens physiques ne sont comptés qu'une fois, et les fichiers de moins de 1 Mo sont regroupés. Le rapport d'un disque entier pèse environ 3 Mo.
-7. **Rien n'est compté deux fois** : le volume Data, accessible via des firmlinks, et les volumes des autres conteneurs sont exclus.
-8. **Pas de blocage indéfini** : si un dossier reste bloqué derrière une demande d'autorisation macOS, le scan s'arrête au bout de 30 s sans progression et rend des résultats partiels, avec un avertissement.
+1. **`getattrlistbulk(2)`**: one system call returns the name, type, allocated size and link count of hundreds of entries at once. There is no `stat()` per file.
+2. **`openat(parent, name)`**: no full path is ever resolved, so threads don't fight over the kernel nodes of `/` and `/Users`.
+3. **A local stack per thread** (depth-first): work is only shared when a thread is idle.
+4. **8 threads, measured**: beyond that, APFS saturates on its internal locks. At 24 threads, kernel time climbs to 309 s cumulated while the scan gets *slower*.
+5. **No iCloud downloads**: with `IOPOL_MATERIALIZE_DATALESS_FILES_OFF`, iCloud or Drive files that aren't downloaded are never fetched during the scan.
+6. **Real size on disk** (`ATTR_FILE_ALLOCSIZE`): hard links are counted once, and files under 1 MB are grouped. A whole-disk report weighs about 3 MB.
+7. **Nothing is counted twice**: the Data volume, reachable through firmlinks, and volumes from other containers are skipped.
+8. **No endless wait**: if a folder stays blocked behind a macOS permission prompt, the scan stops after 30 s without progress and returns partial results, with a warning.
 
-## Sous le capot
+## Under the hood
 
 ```
-scan.c        scanner (C, sans dépendance)  →  JSON de l'arbre élagué
-index.html    interface (HTML/CSS/JS pur)   ←  données injectées dans la page
-app/          app macOS (SwiftUI + WKWebView, pont JS ↔ natif pour la suppression)
-evict         script CLI : scan + page + ouverture dans le navigateur
-build.sh      compile Evict.app universelle (Apple Silicon + Intel) ; « ./build.sh dmg » crée le DMG
-install.sh    compile et installe Evict.app
-test.sh       compare le total du scanner à `du` sur un dossier de test
+scan.c        scanner (C, no dependencies)  →  JSON of the pruned tree
+index.html    interface (plain HTML/CSS/JS) ←  data injected into the page
+app/          macOS app (SwiftUI + WKWebView, JS ↔ native bridge, self-updater)
+evict         CLI script: scan + page + open in the browser
+build.sh      builds a universal Evict.app (Apple Silicon + Intel); "./build.sh dmg" makes the DMG
+install.sh    builds and installs Evict.app
+test.sh       checks the scanner's total against `du` on a test folder
+docs/         website (GitHub Pages) and README images
 ```
 
-## Limites connues
+Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal build, DMG. Pushing a `v*` tag runs the [release workflow](.github/workflows/release.yml), which builds the DMG and attaches it to the GitHub release. The app's built-in updater then picks it up.
 
-- **macOS uniquement pour l'instant** : [Linux](https://github.com/vassilidev/evict/issues/1) et [Windows](https://github.com/vassilidev/evict/issues/2) sont prévus.
-- **Clones APFS** : ils sont comptés à leur taille pleine, donc la somme peut dépasser l'espace réellement utilisé.
-- **Snapshots** : les snapshots APFS et Time Machine ne sont pas visibles. Ils apparaissent dans la case « Invisible ».
+```sh
+# bump CFBundleShortVersionString in app/Info.plist, commit, then:
+git tag v1.2.0 && git push origin v1.2.0
+```
 
-## Feuille de route
+## Known limitations
 
-- [ ] [Support natif Linux](https://github.com/vassilidev/evict/issues/1) : `getdents64` + `statx` par lots via io_uring, WebKitGTK
-- [ ] [Support natif Windows](https://github.com/vassilidev/evict/issues/2) : lecture directe de la MFT NTFS, WebView2
+- **macOS only for now**: [Linux](https://github.com/vassilidev/evict/issues/1) and [Windows](https://github.com/vassilidev/evict/issues/2) are planned.
+- **APFS clones**: they are counted at full size, so the total can exceed the space actually used.
+- **Snapshots**: APFS and Time Machine snapshots aren't visible. They show up in the "Invisible" box.
 
-## Licence
+## Roadmap
 
-[MIT](LICENSE) : fais-en ce que tu veux.
+- [ ] [Native Linux support](https://github.com/vassilidev/evict/issues/1): `getdents64` + batched `statx` through io_uring, WebKitGTK
+- [ ] [Native Windows support](https://github.com/vassilidev/evict/issues/2): direct NTFS MFT reading, WebView2
+
+## License
+
+[MIT](LICENSE).

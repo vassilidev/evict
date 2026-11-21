@@ -5,9 +5,9 @@ cd "$(dirname "$0")"
 app=.build/Evict.app
 rm -rf "$app" .build/tmp
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" .build/tmp
-echo "→ Compilation du scanner"
+echo "→ Building the scanner"
 cc -O2 -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 -o "$app/Contents/MacOS/evict-scan" scan.c
-echo "→ Compilation de l'app"
+echo "→ Building the app"
 for arch in arm64 x86_64; do
   xcrun swiftc -O -swift-version 5 -parse-as-library -target "$arch-apple-macos13" -o ".build/tmp/Evict-$arch" app/Evict.swift
 done
@@ -17,7 +17,7 @@ cp index.html app/AppIcon.icns "$app/Contents/Resources/"
 codesign --force --deep --sign - "$app"
 
 if [ "$1" = dmg ]; then
-  echo "→ Création du DMG"
+  echo "→ Creating the DMG"
   rm -rf .build/dmg .build/Evict.dmg
   mkdir .build/dmg
   cp -R "$app" .build/dmg/

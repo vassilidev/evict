@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Evict · The bouncer for your disk</title>
+<meta name="description" content="Evict scans your entire Mac in about 20 seconds and shows, as proportional boxes, what is really taking up space. Free, open source, 100% local.">
+<meta property="og:title" content="Evict · The bouncer for your disk">
+<meta property="og:description" content="Scan your entire Mac in ~20 s and see at a glance what takes up space. Free, open source, 100% local.">
+<meta property="og:image" content="https://vassilidev.github.io/evict/screenshot.png">
+<meta property="og:url" content="https://vassilidev.github.io/evict/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0d11">
+<link rel="icon" href="icon.png">
+<style>
+:root{--bg:#0b0d11;--panel:#12151b;--line:#222731;--fg:#eef0f4;--mut:#959dab;--accent:#ff5d4f;--red:#e0473d;--orange:#e0921f;--purple:#9061f0;--blue:#3d7fe6;--green:#2ea36b;--grey:#5f6675}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;overflow-x:clip;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+code{font:14px ui-monospace,SFMono-Regular,Menlo,monospace}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+
+.nav{position:sticky;top:0;z-index:5;background:rgba(11,13,17,.8);backdrop-filter:blur(12px);border-bottom:1px solid transparent;transition:border-color .2s}
+.nav.scrolled{border-color:var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;text-decoration:none}
+.logo img{width:28px;height:28px}
+.links{display:flex;gap:24px;font-size:14px}
+.links a{color:var(--mut);text-decoration:none;transition:color .15s}
+.links a:hover{color:var(--fg)}
+
+.hero{position:relative;text-align:center;padding:88px 0 40px}
+.hero::before{content:"";position:absolute;top:-60px;left:50%;width:100vw;transform:translateX(-50%);height:520px;z-index:-1;background:radial-gradient(600px 260px at 50% 0,rgba(255,93,79,.18),transparent 70%),radial-gradient(500px 240px at 25% 30%,rgba(144,97,240,.10),transparent 70%),radial-gradient(500px 240px at 75% 30%,rgba(224,146,31,.10),transparent 70%)}
+.pill{display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--mut);border:1px solid var(--line);border-radius:30px;padding:5px 14px;background:rgba(18,21,27,.6)}
+.pill i{width:8px;height:8px;border-radius:2px;background:var(--green)}
+h1{font-size:clamp(40px,7vw,76px);line-height:1.02;letter-spacing:-.035em;margin:22px 0 18px;font-weight:800}
+h1 span{color:var(--accent)}
+.lead{font-size:clamp(17px,2.2vw,20px);color:#c3c9d4;max-width:640px;margin:0 auto}
+.cta{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:34px}
+.btn{display:inline-flex;align-items:center;gap:10px;background:var(--fg);color:#0b0d11;font-weight:700;font-size:17px;text-decoration:none;padding:14px 26px;border-radius:12px;transition:transform .15s,box-shadow .15s;box-shadow:0 8px 30px rgba(255,255,255,.08)}
+.btn:hover{transform:translateY(-1px);box-shadow:0 12px 36px rgba(255,255,255,.14)}
+.btn.soft{background:var(--panel);color:var(--fg);border:1px solid var(--line);box-shadow:none}
+.btn svg{width:20px;height:20px}
+.meta{font-size:14px;color:var(--mut)}
+.other{font-size:14px;color:var(--mut);margin-top:6px}
+.other a,.meta a{color:#c3c9d4;text-decoration-color:#4b5363;text-underline-offset:3px}
+
+.shot{margin:40px auto 0;max-width:1080px}
+.win{border-radius:14px;overflow:hidden;border:1px solid #2a303b;box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02)}
+.win .bar{height:30px;background:#171a21;display:flex;align-items:center;gap:7px;padding:0 12px;border-bottom:1px solid #22262f}
+.win .bar i{width:11px;height:11px;border-radius:50%;background:#3a3f4a}
+.win .bar i:nth-child(1){background:#ff5f57}.win .bar i:nth-child(2){background:#febc2e}.win .bar i:nth-child(3){background:#28c840}
+.win img{display:block;width:100%;height:auto}
+figcaption{text-align:center;color:#5d6574;font-size:13px;margin-top:12px}
+
+section{padding:88px 0 0}
+h2{font-size:clamp(28px,4vw,40px);letter-spacing:-.025em;margin:0 0 12px;line-height:1.1}
+.sub{color:var(--mut);margin:0 0 36px;max-width:620px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;transition:border-color .2s,transform .2s}
+.card:hover{border-color:#353c49;transform:translateY(-2px)}
+.card i{display:block;width:28px;height:28px;border-radius:7px;margin-bottom:14px}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--mut);font-size:15px}
+
+.speed{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.bench{display:grid;gap:14px}
+.bench .row{display:grid;grid-template-columns:150px 1fr 56px;gap:14px;align-items:center;font-size:14px;color:var(--mut)}
+.bench .b{height:12px;border-radius:6px;background:#1a1e26;overflow:hidden}
+.bench .b i{display:block;height:100%;border-radius:6px;background:#3a404b}
+.bench .row b{text-align:right;color:var(--fg);font-variant-numeric:tabular-nums}
+.bench .hi{color:var(--fg);font-weight:700}
+.bench .hi .b i{background:linear-gradient(90deg,var(--accent),var(--orange))}
+.bench-note{color:#5d6574;font-size:13px;margin-top:14px}
+.tech{display:grid;gap:14px;margin:0;padding:0;list-style:none}
+.tech li{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;color:var(--mut);font-size:15px}
+.tech b{color:var(--fg)}
+
+.steps{counter-reset:s;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:0;padding:0;list-style:none}
+.steps li{counter-increment:s;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;color:var(--mut);font-size:15px}
+.steps li::before{content:counter(s);display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#1d222b;color:var(--fg);font-weight:700;margin-bottom:12px}
+.steps b{color:var(--fg)}
+.src{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;color:var(--mut);font-size:14px;overflow-x:auto}
+.src code{color:#c3c9d4;white-space:pre}
+
+.final{text-align:center;padding:110px 0 30px}
+.final .cta{margin-top:24px}
+footer{border-top:1px solid var(--line);margin-top:80px}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:26px 24px;color:#5d6574;font-size:14px}
+footer a{color:var(--mut);text-decoration:none}
+footer a:hover{color:var(--fg)}
+
+@media (max-width:900px){.grid{grid-template-columns:1fr 1fr}.speed{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:600px){.links a:not(.gh){display:none}.grid,.steps{grid-template-columns:1fr}.hero{padding-top:56px}.bench .row{grid-template-columns:110px 1fr 48px}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}.btn,.card{transition:none}}
+</style>
+</head>
+<body>
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="logo" href="#"><img src="icon.png" alt="">Evict</a>
+    <nav class="links">
+      <a href="#features">Features</a>
+      <a href="#speed">Speed</a>
+      <a href="#install">Install</a>
+      <a class="gh" href="https://github.com/vassilidev/evict">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <span class="pill"><i></i>Free · Open source · 100% local</span>
+    <h1>The bouncer<br>for your disk<span>.</span></h1>
+    <p class="lead">Evict scans your <b>entire</b> Mac in about twenty seconds and shows, as proportional boxes, what is really taking up space. Click, drill into folders, clean up.</p>
+    <div class="cta" data-cta></div>
+  </section>
+
+  <figure class="shot">
+    <div class="win"><div class="bar"><i></i><i></i><i></i></div><img src="screenshot.png" width="1600" height="1000" alt="Evict: the disk as colored boxes, each one proportional to the space it takes"></div>
+    <figcaption>Screenshot taken on a fictional disk.</figcaption>
+  </figure>
+
+  <section id="features">
+    <h2>See everything, then clean up.</h2>
+    <p class="sub">A map where each box's size is the space it really takes. The biggest offenders jump out at you.</p>
+    <div class="grid">
+      <div class="card"><i style="background:var(--accent)"></i><h3>The whole disk in ~20 s</h3><p>5.7 million files read on a Mac mini M4 Pro. No folder missed, nothing counted twice.</p></div>
+      <div class="card"><i style="background:var(--orange)"></i><h3>A treemap</h3><p>Click to drill into a folder, use the breadcrumb to go back up. Your disk as nesting dolls.</p></div>
+      <div class="card"><i style="background:var(--red)"></i><h3>Regenerable in red</h3><p>Caches, <code>node_modules</code>, DerivedData, builds: what you can delete without regret stands out.</p></div>
+      <div class="card"><i style="background:var(--purple)"></i><h3>Built-in cleanup</h3><p>Move to Trash, delete permanently or show in Finder. Admin password only when needed, system paths stay protected.</p></div>
+      <div class="card"><i style="background:var(--blue)"></i><h3>Hide what's in the way</h3><p>Hide the System folder or any other to give the rest more room. Remembered across scans.</p></div>
+      <div class="card"><i style="background:var(--green)"></i><h3>100% local</h3><p>Your files never leave your Mac: no AI, no telemetry, no dependencies. The only request is the update check.</p></div>
+    </div>
+  </section>
+
+  <section id="speed" class="speed">
+    <div>
+      <h2>Fast. Really.</h2>
+      <p class="sub">Same disk, same Mac: 5.7 million files, 426 GB.</p>
+      <div class="bench">
+        <div class="row"><span>Python (os.scandir)</span><div class="b"><i style="width:100%"></i></div><b>153 s</b></div>
+        <div class="row"><span>First C version</span><div class="b"><i style="width:27%"></i></div><b>41 s</b></div>
+        <div class="row hi"><span>Evict</span><div class="b"><i style="width:13%"></i></div><b>20 s</b></div>
+      </div>
+      <p class="bench-note">Mac mini M4 Pro, internal SSD, warm cache. 27 s cold, right after a reboot.</p>
+    </div>
+    <ul class="tech">
+      <li><b>getattrlistbulk</b>: name, type and size of hundreds of files in a single system call, with no <code>stat()</code> per file.</li>
+      <li><b>openat relative to the parent</b>: no full path is ever resolved, so threads don't fight in the kernel.</li>
+      <li><b>8 threads, measured</b>: beyond that, APFS saturates on its locks and the scan slows down.</li>
+      <li><b>No iCloud downloads</b>: files that aren't downloaded are never fetched during the scan.</li>
+    </ul>
+  </section>
+
+  <section id="install">
+    <h2>Install in a minute.</h2>
+    <p class="sub">macOS 13 or later, Apple Silicon or Intel Mac.</p>
+    <ol class="steps">
+      <li><b>Download Evict.dmg</b>, open it and drag Evict into Applications.</li>
+      <li><b>First launch</b>: Evict isn't notarized by Apple. Go to System Settings → Privacy &amp; Security → <b>Open Anyway</b>.</li>
+      <li><b>Full Disk Access</b>: Evict asks for it so it can scan everything. Turn it on in the settings that open.</li>
+      <li><b>The scan starts on its own.</b> Click to explore, right-click to delete, <code>⌘R</code> to rescan. Updates install from the app.</li>
+    </ol>
+    <div class="src">Prefer to build it yourself?<br><code>git clone https://github.com/vassilidev/evict.git &amp;&amp; cd evict &amp;&amp; ./install.sh</code></div>
+  </section>
+
+  <section class="final">
+    <h2>Get your space back.</h2>
+    <div class="cta" data-cta></div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Evict · MIT license · made by <a href="https://github.com/vassilidev">vassilidev</a></span>
+    <span><a href="https://github.com/vassilidev/evict">Source code</a> · <a href="https://github.com/vassilidev/evict/releases">Releases</a> · <a href="https://github.com/vassilidev/evict/issues">Report an issue</a></span>
+  </div>
+</footer>
+
+<script>
+const REPO = 'https://github.com/vassilidev/evict';
+const DMG = REPO + '/releases/latest/download/Evict.dmg';
+const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>';
+
+// iPads report a Mac platform, so touch support tells them apart
+const ua = navigator.userAgent, plat = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase();
+const os = /android|iphone|ipad|ipod/i.test(ua) || (plat.includes('mac') && navigator.maxTouchPoints > 1) ? 'mobile'
+  : plat.includes('win') ? 'windows' : plat.includes('linux') || /linux|x11|cros/i.test(ua) ? 'linux' : 'mac';
+
+let meta = 'macOS 13+ · Apple Silicon and Intel · free';
+function render() {
+  const soon = {windows: ['Windows', 2], linux: ['Linux', 1]}[os];
+  for (const box of document.querySelectorAll('[data-cta]')) {
+    box.innerHTML = soon
+      ? `<a class="btn soft" href="${REPO}/issues/${soon[1]}">Coming to ${soon[0]}: follow progress</a>
+         <span class="meta">You're on ${soon[0]}. Evict is Mac-only for now: <a href="${DMG}">download for macOS</a></span>`
+      : `<a class="btn" href="${DMG}">${ICON}Download for macOS</a>
+         <span class="meta">${os === 'mobile' ? 'Install it from a Mac · ' : ''}${meta}</span>
+         <span class="other">Windows and Linux are coming: <a href="${REPO}/issues/2">Windows</a> · <a href="${REPO}/issues/1">Linux</a></span>`;
+  }
+}
+render();
+
+// Version and size of the latest release; the static text above stays if GitHub's API is unreachable
+fetch('https://api.github.com/repos/vassilidev/evict/releases/latest')
+  .then(r => r.ok ? r.json() : null)
+  .then(rel => {
+    const dmg = rel?.assets?.find(a => a.name === 'Evict.dmg');
+    if (!dmg) return;
+    meta = `${rel.tag_name} · macOS 13+ · Apple Silicon and Intel · ${(dmg.size / 1e6).toLocaleString('en-US', {maximumFractionDigits: 1})} MB`;
+    render();
+  })
+  .catch(() => {});
+
+addEventListener('scroll', () => document.getElementById('nav').classList.toggle('scrolled', scrollY > 10), {passive: true});
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Usage: ./evict [dossier]   (par défaut : tout le disque)
+# Usage: ./evict [folder]   (default: the whole disk)
 set -e
 dir=$(dirname "$(realpath "$0")")
 bin="$dir/.build/scan"

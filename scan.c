@@ -373,13 +373,13 @@ int main(int argc, char **argv) {
     int still = 0;
     while (atomic_load(&pending)) {
         uint64_t now = atomic_load(&scanned);
-        if (tty) fprintf(stderr, "\r%llu éléments…", (unsigned long long)now);
+        if (tty) fprintf(stderr, "\r%llu items…", (unsigned long long)now);
         // No progress for 30 s means the remaining threads wait on macOS privacy prompts: keep what we have
         if (now != last) { last = now; still = 0; }
         else if (++still >= 300) {
             atomic_store(&stopping, 1);
-            fprintf(stderr, "\nScan bloqué par une demande d'autorisation macOS : résultats partiels. "
-                            "Donne l'Accès complet au disque pour tout voir.\n");
+            fprintf(stderr, "\nScan stalled on a macOS permission prompt: partial results. "
+                            "Give Full Disk Access to see everything.\n");
             break;
         }
         usleep(100000);
@@ -394,7 +394,7 @@ int main(int argc, char **argv) {
     statvfs(root, &vfs);
     char date[32];
     time_t now = time(NULL);
-    strftime(date, sizeof date, "%d/%m/%Y %H:%M", localtime(&now));
+    strftime(date, sizeof date, "%Y-%m-%d %H:%M", localtime(&now));
     const char *home = getenv("HOME");
 
     printf("{\"total\":%llu,\"free\":%llu,\"count\":%llu,\"secs\":%.1f,\"date\":\"%s\",\"home\":",
@@ -404,7 +404,7 @@ int main(int argc, char **argv) {
     fputs(",\"tree\":", stdout);
     emit(top);
     puts("}");
-    fprintf(stderr, "\r%llu éléments scannés en %.2f s (%d threads)\n",
+    fprintf(stderr, "\r%llu items scanned in %.2f s (%d threads)\n",
             (unsigned long long)atomic_load(&scanned), secs, nth);
     return 0;
 }

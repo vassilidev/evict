@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scanner matches du
+        run: ./test.sh
+
+      - name: Page scripts parse
+        run: |
+          for page in index.html docs/index.html; do
+            awk '/<script>/{f=1;next}/<\/script>/{f=0}f' "$page" > "$RUNNER_TEMP/page.js"
+            node --check "$RUNNER_TEMP/page.js"
+          done
+
+      - name: Build the universal app and DMG
+        run: ./build.sh dmg
+
+      - name: Check the bundle
+        run: |
+          for bin in Evict evict-scan; do
+            lipo -archs ".build/Evict.app/Contents/MacOS/$bin" | grep -q 'x86_64 arm64'
+          done
+          codesign --verify --deep --strict .build/Evict.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Evict.dmg
+          path: .build/Evict.dmg

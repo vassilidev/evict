@@ -10,5 +10,5 @@ mkdir -p "$dest"
 pkill -x Evict 2>/dev/null || true
 rm -rf "$dest/Evict.app"
 cp -R .build/Evict.app "$dest/"
-echo "✓ Installé : $dest/Evict.app"
+echo "✓ Installed: $dest/Evict.app"
 open "$dest/Evict.app"
