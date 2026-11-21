@@ -15,6 +15,7 @@
   <img alt="C + SwiftUI" src="https://img.shields.io/badge/C%20%2B%20SwiftUI-natif-e0473d">
   <img alt="0 dépendance" src="https://img.shields.io/badge/d%C3%A9pendances-0-2ea36b">
   <img alt="100% local" src="https://img.shields.io/badge/100%25-local%2C%20sans%20IA-3d7fe6">
+  <img alt="Licence MIT" src="https://img.shields.io/badge/licence-MIT-8b93a1">
 </p>
 
 ![Evict : carte du disque en boîtes](docs/screenshot.png)
@@ -36,6 +37,15 @@
 
 ## Installation
 
+### Télécharger
+
+**[⬇ Télécharger Evict.dmg](https://github.com/vassilidev/evict/releases/latest/download/Evict.dmg)** (macOS 13+, Apple Silicon et Intel). Ouvre le DMG, puis glisse Evict dans Applications.
+
+> Evict n'est pas notarisé par Apple, car il faudrait un compte développeur payant. Au premier lancement, macOS refuse donc de l'ouvrir. Va dans **Réglages Système → Confidentialité et sécurité** et clique sur **« Ouvrir quand même »**. Une seule fois suffit.
+> En terminal, cette commande fait la même chose : `xattr -dr com.apple.quarantine /Applications/Evict.app`
+
+### Compiler soi-même
+
 Prérequis : macOS 13 ou plus récent, et les outils de développement d'Apple (`xcode-select --install`).
 
 ```sh
@@ -47,7 +57,7 @@ cd evict
 `install.sh` compile Evict.app, l'installe dans `/Applications` (ou `~/Applications`) puis l'ouvre. Ensuite, lance Evict depuis Spotlight quand tu veux, et utilise **⌘R** pour rescanner.
 
 > **Au premier lancement**, Evict demande l'**Accès complet au disque**. Sans lui, macOS interrompt le scan avec une fenêtre d'autorisation par dossier protégé (Bureau, Documents, données des autres apps…). Clique sur « Ouvrir les réglages », active Evict, et le scan démarre tout seul. « Scanner quand même » reste possible.
-> L'app est signée localement : il faut refaire cette autorisation après chaque `./install.sh`.
+> L'app n'a pas de signature Apple : il faut refaire cette autorisation après chaque mise à jour ou chaque `./install.sh`.
 
 ### En ligne de commande
 
@@ -95,7 +105,8 @@ scan.c        scanner (C, sans dépendance)  →  JSON de l'arbre élagué
 index.html    interface (HTML/CSS/JS pur)   ←  données injectées dans la page
 app/          app macOS (SwiftUI + WKWebView, pont JS ↔ natif pour la suppression)
 evict         script CLI : scan + page + ouverture dans le navigateur
-install.sh    compile, signe localement et installe Evict.app
+build.sh      compile Evict.app universelle (Apple Silicon + Intel) ; « ./build.sh dmg » crée le DMG
+install.sh    compile et installe Evict.app
 test.sh       compare le total du scanner à `du` sur un dossier de test
 ```
 
@@ -109,3 +120,7 @@ test.sh       compare le total du scanner à `du` sur un dossier de test
 
 - [ ] [Support natif Linux](https://github.com/vassilidev/evict/issues/1) : `getdents64` + `statx` par lots via io_uring, WebKitGTK
 - [ ] [Support natif Windows](https://github.com/vassilidev/evict/issues/2) : lecture directe de la MFT NTFS, WebView2
+
+## Licence
+
+[MIT](LICENSE) : fais-en ce que tu veux.
