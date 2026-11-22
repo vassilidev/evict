@@ -271,7 +271,13 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
 }
 @media (max-width:720px){
   .nav .links{display:none}
-  .nav{justify-content:space-between}
+  /* On a phone the nav is one slim bar, the same before and after scrolling */
+  .nav,.nav.scrolled{justify-content:space-between;top:8px;width:calc(100% - 16px);gap:8px;padding:3px 3px 3px 14px}
+  .nav .brand,.nav.scrolled .brand{font-size:16px}
+  .nav .pill,.nav.scrolled .pill{font-size:14px;gap:8px;padding:6px 6px 6px 16px}
+  .nav .pill i,.nav.scrolled .pill i{width:32px;height:32px}
+  .pill.big{white-space:normal}
+  p code{overflow-wrap:anywhere}
   .hero{padding-top:120px}
   .lane{grid-template-columns:110px 1fr 64px;gap:12px}
   .how{grid-template-columns:1fr}
@@ -735,7 +741,7 @@ const cta = {
   mac: `<a class="pill big" href="${DMG}">Download for macOS${ARROW}</a>${others}`,
   linux: `<div class="cmd"><code>${INSTALL}</code><button class="copy" type="button" data-copy="${INSTALL}" aria-label="Copy the install command">${COPY}<span>Copy</span></button></div>${others}`,
   windows: `<a class="pill big" href="download.html#windows" data-setup>Download for Windows${ARROW}</a>${others}`,
-  mobile: `<a class="pill big" href="download.html">Get Evict for macOS, Windows or Linux${ARROW}</a>`,
+  mobile: `<a class="pill big" href="download.html">Download Evict${ARROW}</a>`,
 }[os];
 for (const box of document.querySelectorAll('[data-cta]')) box.innerHTML = cta;
 for (const box of document.querySelectorAll('[data-cta-small]')) box.innerHTML = `<a class="pill" href="${DMG}">Download Evict.dmg${ARROW}</a>`;
