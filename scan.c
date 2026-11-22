@@ -41,7 +41,9 @@ typedef struct Dir {
     _Atomic int refs;
 } Dir;
 
-typedef struct { Node *node; Dir *parent; } Job;
+// Inside a dependency folder (node_modules, vendor, .venv…) sizes are only added up into its node (sum):
+// such jobs carry their own name instead of a tree node
+typedef struct { Node *node; Dir *parent; Node *sum; char *name; } Job;
 typedef struct { Job *v; size_t n, cap; } Stack;
 
 static Stack shared;
@@ -162,14 +164,24 @@ static int skip_state(const char *path) {
     return below ? 2 : 0;
 }
 
+// Package and dependency folders: their total matters, the thousands of folders inside don't
+static int is_deps(const char *name) {
+    static const char *names[] = {"node_modules", "vendor", ".venv", "venv", "site-packages", "__pycache__", "Pods",
+                                  "bower_components", ".tox", ".bundle", ".pnpm-store", ".gradle", ".m2", ".cargo"};
+    for (size_t i = 0; i < sizeof names / sizeof *names; i++)
+        if (!strcmp(name, names[i])) return 1;
+    return 0;
+}
+
 static void scan_dir(Job j, char *buf, Stack *local) {
-    Node *dir = j.node;
-    int fd = j.parent ? openat(j.parent->fd, dir->name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+    Node *dir = j.node, *sum = j.sum ? j.sum : dir && is_deps(dir->name) ? dir : NULL;
+    int fd = j.parent ? openat(j.parent->fd, dir ? dir->name : j.name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
                       : open(root, O_RDONLY | O_DIRECTORY);
+    free(j.name);
     // The tree is being printed: a thread released late by a privacy prompt must not touch it
     if (atomic_load(&stopping)) { if (fd >= 0) close(fd); return; }
     if (j.parent) release(j.parent);
-    if (fd < 0) { dir->err = 1; return; }
+    if (fd < 0) { if (dir) dir->err = 1; return; }
     Dir *me = malloc(sizeof *me);
     if (!me) { perror("malloc"); exit(1); }
     me->fd = fd;
@@ -181,11 +193,11 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                       ATTR_CMN_OBJTYPE | ATTR_CMN_FILEID,
         .fileattr = ATTR_FILE_LINKCOUNT | ATTR_FILE_ALLOCSIZE,
     };
-    uint64_t count = 0, bytes = 0;
+    uint64_t count = 0, bytes = 0, deep = 0, ndeep = 0;
     size_t first = local->n;
     for (;;) {
         int r = getattrlistbulk(fd, &al, buf, BUF_SIZE, 0);
-        if (r <= 0) { if (r < 0) dir->err = 1; break; }
+        if (r <= 0) { if (r < 0 && dir) dir->err = 1; break; }
         char *next = buf;
         for (int i = 0; i < r; i++) {
             // Entry layout: length, returned attrs, error, then requested attrs in bit order
@@ -216,7 +228,12 @@ static void scan_dir(Job j, char *buf, Stack *local) {
             if (ret.commonattr & ATTR_CMN_OBJTYPE) { memcpy(&type, cur, sizeof type); cur += sizeof type; }
             if (ret.commonattr & ATTR_CMN_FILEID) { memcpy(&fileid, cur, 8); cur += 8; }
             count++;
-            if (type == VDIR) {
+            if (type == VDIR && sum) {
+                char *copy = malloc(nlen + 1);
+                if (!copy) { perror("malloc"); exit(1); }
+                memcpy(copy, name, nlen + 1);
+                push(local, (Job){NULL, me, sum, copy});
+            } else if (type == VDIR) {
                 char *path = NULL;
                 if (dir->path) {
                     size_t pl = strlen(dir->path) == 1 ? 0 : strlen(dir->path);
@@ -232,7 +249,7 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                 Node *k = new_node(name, nlen, 1);
                 k->path = path;
                 add_kid(dir, k);
-                push(local, (Job){k, me});
+                push(local, (Job){k, me, NULL, NULL});
             } else {
                 uint32_t nlink = 1;
                 uint64_t alloc = 0;
@@ -240,7 +257,10 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                 if (ret.fileattr & ATTR_FILE_ALLOCSIZE) { memcpy(&alloc, cur, 8); cur += 8; }
                 if (nlink > 1 && link_seen(fileid ^ ((uint64_t)(uint32_t)dev << 48))) continue;
                 bytes += alloc;
-                if (alloc >= MIN_SIZE) {
+                if (sum) {
+                    deep += alloc;
+                    ndeep++;
+                } else if (alloc >= MIN_SIZE) {
                     Node *k = new_node(name, nlen, 0);
                     k->size = alloc;
                     add_kid(dir, k);
@@ -250,6 +270,11 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                 }
             }
         }
+    }
+    // Several threads add up the same dependency folder
+    if (sum) {
+        __atomic_fetch_add(&sum->small, deep, __ATOMIC_RELAXED);
+        __atomic_fetch_add(&sum->nsmall, (uint32_t)ndeep, __ATOMIC_RELAXED);
     }
     size_t added = local->n - first;
     atomic_fetch_add_explicit(&me->refs, (int)added, memory_order_relaxed);
@@ -372,7 +397,7 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &t0);
     Node *top = new_node(root, strlen(root), 1);
     if (skip_state(root) == 2) top->path = strdup(root);
-    push(&shared, (Job){top, NULL});
+    push(&shared, (Job){top, NULL, NULL, NULL});
     atomic_store(&pending, 1);
 
     long ncpu = sysconf(_SC_NPROCESSORS_ONLN);

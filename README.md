@@ -27,15 +27,18 @@
 
 ![Evict: the disk as a treemap of proportional boxes](docs/screenshot.png)
 
-![Evict's list view: folders sorted by size and expanded in place](docs/list.png)
+![Evict's home page: the disk by category, cleanup shortcuts and where the space is](docs/home.png)
 <p align="center"><sub>Screenshots taken on a fictional disk.</sub></p>
 
 ## What Evict does
 
 - **The whole disk, fast**: 5.7 million files (426 GB) in 20 s on a Mac mini M4 Pro, and 27 s cold, right after a reboot.
 - **A light scan screen** (app): blocks build up while the disk is read, with the real item count, volume, elapsed time and speed (items per second), streamed by the scanner every 300 ms. The animation only moves layers on the GPU, so the scan keeps its full speed.
+- **A home page**: the disk as one bar split by category, tiles for the Trash, Downloads, regenerable files, duplicates and Claude's quick wins, then where the space is, the largest files and the regenerable folders.
 - **A treemap**, finviz-style: each box's area is proportional to the space it takes. Click to drill into a folder, use the breadcrumb to go back up.
-- **A list view**: the same folder as a tree sorted by size, with bars and percentages. Expand folders in place to see the biggest items at a glance.
+- **A list view**: the same folder as a tree sorted by size, each row drawn over a bar of its size and color. Expand folders in place to see the biggest items at a glance.
+- **Duplicates**: files of the same size and type are compared by content (start, middle and end), by kind (videos, photos, audio, archives, documents). Each set keeps one copy; **Select extra copies** adds the others to the selection. APFS clones, which share their space with the original, are flagged: deleting them frees nothing.
+- **Dependency folders count as one block**: `node_modules`, `vendor`, `.venv`, `Pods`, `site-packages`… are added up without keeping the thousands of folders inside, which halves the report on a developer's disk.
 - **Search** (`⌘K`, `⌘F` or `/`): a palette opens over the blurred map. With nothing typed it lists the largest files on the disk; otherwise every file and folder whose name matches, biggest first, as cards with their size, location and a size gauge. `↑` `↓` to move, `↵` to jump to the item, `⌘↵` to show it in Finder, `⌘Y` to preview it.
 - **Filter by extension**: type `.mov .mp4`, or click one of the extensions that weigh the most, right under the search field, to see every video, disk image or archive on the disk.
 - **Trash and Downloads at a glance**: two shortcuts in the header show their size and open them in one click, including every Downloads folder on the disk. Items you move to the Trash from Evict show up there, and **Empty Trash…** frees the space for good.
@@ -104,7 +107,7 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | Click a folder | Drill into it (map) · expand it in place (list) |
 | Double-click a folder (list) | Drill into it |
 | Click a file · right-click · `⋯` | Menu: open, show in Finder, copy path, ask AI, hide, delete |
-| **Map** / **List** | Switch views (remembered) |
+| **Home** / **Map** / **List** | Switch views (each scan opens on Home) |
 | `⌘K`, `⌘F` or `/` | Search palette · `Esc` closes |
 | Checkbox · `⌘`-click · `Shift`-click · `⌘A` | Select · add to the selection · select a range · select every row shown |
 | `Esc` with a selection | Clear the selection |
@@ -156,7 +159,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.9.0 && git push origin v1.9.0
+git tag v1.10.0 && git push origin v1.10.0
 ```
 
 ## Known limitations

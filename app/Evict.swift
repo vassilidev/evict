@@ -1,3 +1,4 @@
+import CryptoKit
 import Quartz
 import SwiftUI
 import WebKit
@@ -456,7 +457,58 @@ final class Model: ObservableObject {
         webView?.evaluateJavaScript("\(function)(\(id), \(arg))")
     }
 
+    private var job: Task<Void, Never>?
+
+    // Candidate sets from the page (same size and type) checked for real: same byte count and same sampled content
+    func findDuplicates(id: Int, groups: [[String]]) {
+        cancelAsk()
+        job = Task {
+            let sets = await Model.compare(groups)
+            if !Task.isCancelled { send("evictDupes", id, ["sets": sets]) }
+        }
+    }
+
+    // Runs off the main thread, and stops when the panel closes (the task is cancelled)
+    nonisolated static func compare(_ groups: [[String]]) async -> [[[Any]]] {
+        var sets: [[[Any]]] = []
+        for group in groups {
+            if Task.isCancelled { break }
+            var byPrint: [String: [[Any]]] = [:]
+            for path in group {
+                if let key = fingerprint(path) { byPrint[key, default: []].append([path, privateSize(path) ?? -1]) }
+            }
+            sets += byPrint.values.filter { $0.count > 1 }
+        }
+        return sets
+    }
+
+    // Size, then SHA-256 of the first, middle and last megabyte: enough to tell copies apart without reading them whole
+    nonisolated static func fingerprint(_ path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd() else { return nil }
+        let chunk: UInt64 = 1 << 20, small = size <= 3 * chunk
+        var hash = SHA256()
+        for offset in small ? [0] : [0, size / 2, size - chunk] {
+            try? handle.seek(toOffset: offset)
+            if let data = try? handle.read(upToCount: Int(small ? size : chunk)) { hash.update(data: data) }
+        }
+        return "\(size):" + hash.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    // Bytes only this file owns: an APFS clone shares its blocks with the original, so deleting it frees about nothing
+    nonisolated static func privateSize(_ path: String) -> Int64? {
+        var list = attrlist()
+        list.bitmapcount = u_short(ATTR_BIT_MAP_COUNT)
+        list.forkattr = attrgroup_t(ATTR_CMNEXT_PRIVATESIZE)
+        var buf = [UInt8](repeating: 0, count: 64)
+        guard getattrlist(path, &list, &buf, buf.count, UInt32(FSOPT_ATTR_CMN_EXTENDED)) == 0 else { return nil }
+        return buf.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 4, as: Int64.self) }
+    }
+
     func cancelAsk() {
+        job?.cancel()
+        job = nil
         running?.terminate()
         running = nil
     }
@@ -649,6 +701,9 @@ final class Bridge: NSObject, WKScriptMessageHandler {
             case "archive":
                 guard let id = body["id"] as? Int, let path = body["path"] as? String else { return }
                 model.listArchive(id: id, path: path)
+            case "dupes":
+                guard let id = body["id"] as? Int, let groups = body["groups"] as? [[String]] else { return }
+                model.findDuplicates(id: id, groups: groups)
             case "deleteMany":
                 guard let items = body["items"] as? [[Any]] else { return }
                 model.confirmDelete(items.compactMap { item in

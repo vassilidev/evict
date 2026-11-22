@@ -14,20 +14,24 @@ button{font:inherit;font-size:12px;border:1px solid var(--line);background:var(-
 button:hover{border-color:#4b5363;background:#1c2028}
 button.danger{color:#ff8b7e}
 
-header{display:grid;gap:8px;padding:10px 14px 8px}
+header{display:grid;gap:9px;padding:12px 14px 9px}
 .top,.bottom{display:flex;align-items:center;gap:10px;min-width:0}
-.brand{font-weight:800;font-size:16px;letter-spacing:.01em}
-.brand span{color:var(--accent)}
-#crumbs{display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden;font-size:14px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:17px;letter-spacing:.01em;flex-shrink:0}
+.brand svg{width:20px;height:20px}
+.brand b span{color:var(--accent)}
+#crumbs{display:flex;align-items:center;gap:2px;min-width:0;flex:0 1 auto;overflow:hidden;font-size:14.5px}
+#crumbs .here{margin-left:8px;padding:1px 8px;border-radius:20px;background:#1c2028;color:#c7ccd6;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 #crumbs a{color:var(--mut);text-decoration:none;padding:3px 7px;border-radius:6px;white-space:nowrap;transition:background .15s,color .15s}
 #crumbs a:hover{background:#1c2028;color:var(--fg)}
-#crumbs a:last-child{color:var(--fg);font-weight:650}
+#crumbs a:last-of-type{color:var(--fg);font-weight:650}
 #crumbs i{color:#4b5363;font-style:normal}
 button.icon{width:28px;height:26px;padding:0;font-size:17px;line-height:1;border-color:transparent;background:none;color:var(--mut)}
 button.icon:hover{background:#1c2028;color:var(--fg)}
-.search{display:flex;align-items:center;gap:8px;margin-left:auto;width:300px;min-width:150px;flex-shrink:1;padding:5px 6px 5px 10px;color:#6b7383;text-align:left}
-.search span{flex:1;overflow:hidden;text-overflow:ellipsis}
-.search svg{width:14px;height:14px;flex-shrink:0}
+.search{display:flex;align-items:center;gap:10px;margin:0 auto;width:min(620px,100%);min-width:180px;height:38px;flex-shrink:1;padding:0 8px 0 13px;border:1px solid #2f3541;border-radius:11px;background:#161a21;color:#7d8595;font-size:14px;text-align:left;box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 8px 24px rgba(0,0,0,.25);transition:border-color .15s,background .15s}
+.search:hover{border-color:#4b5363;background:#1a1e26;color:#a3aab7}
+.search span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.search svg{width:16px;height:16px;flex-shrink:0;color:#c7ccd6}
+.cats{display:flex;min-width:0}
 kbd{font:600 10.5px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:1px 5px;background:#11141a}
 #status{display:flex;justify-content:space-between;gap:16px;padding:0 16px 8px;color:var(--mut);font-size:11.5px;white-space:nowrap;overflow:hidden}
 #keys kbd{margin:0 5px 0 14px}
@@ -37,7 +41,7 @@ kbd{font:600 10.5px -apple-system,BlinkMacSystemFont,system-ui,sans-serif;color:
 #legend button.on{border-color:var(--fg);color:var(--fg)}
 #legend i{width:9px;height:9px;border-radius:3px}
 .acts{display:flex;gap:6px}
-body.live .bottom,body.live .top button,body.live #status{display:none}
+body.live .bottom,body.live .cats,body.live .top button,body.live #status{display:none}
 /* Scan loader: only opacity and transform animate, so it costs the scan nothing */
 .stage{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:22px}
 .frame{position:relative;width:440px;height:270px}
@@ -46,10 +50,52 @@ body.live .bottom,body.live .top button,body.live #status{display:none}
 .stage-info{color:var(--mut);font-variant-numeric:tabular-nums}
 .stage-info b{color:var(--fg);font-weight:650}
 .stage-info i{font-style:normal;margin:0 9px;color:#4b5363}
-#places{display:flex;gap:6px;flex-shrink:0}
+#places{display:flex;gap:6px;flex-shrink:0;margin-left:auto}
 .place{display:flex;align-items:center;gap:6px;color:#c7ccd6}
 .place svg{width:13px;height:13px;flex-shrink:0}
 .place.on{border-color:var(--fg);color:var(--fg)}
+/* Home: the disk at a glance */
+#home{overflow:auto;padding:6px 22px 28px}
+.h-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:8px 0 12px}
+.h-head h1{margin:0;font-size:28px;letter-spacing:-.02em;line-height:1.1}
+.h-head p{margin:0;color:var(--mut);font-size:14px;font-variant-numeric:tabular-nums}
+.cap{display:flex;gap:2px;height:26px;border-radius:8px;overflow:hidden;background:#0f1217}
+.cap i{min-width:3px}
+.cap i.free{background:repeating-linear-gradient(45deg,#181c23 0 6px,#1f242d 6px 12px)}
+.h-legend{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 22px}
+.h-legend button{display:flex;align-items:center;gap:7px;border-radius:20px;padding:3px 10px 3px 8px;color:var(--mut)}
+.h-legend button b{color:var(--fg);font-weight:650}
+.h-legend i,.t-label i{width:9px;height:9px;border-radius:3px;flex-shrink:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:26px}
+.tile{display:grid;align-content:start;gap:6px;padding:15px 16px 14px;border:1px solid var(--line);border-radius:12px;background:#13161c}
+.t-label{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:12.5px}
+.t-label svg{width:14px;height:14px}
+.t-val{font-size:25px;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.tile button{justify-self:start;margin-top:3px}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:26px}
+.h-col h2{margin:0 0 6px;padding-left:10px;font-size:13.5px;color:#c7ccd6}
+.h-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 12px;width:100%;margin-bottom:3px;padding:8px 10px;border:0;border-radius:8px;background:none;text-align:left;white-space:normal}
+.h-row:hover{background:#171b22}
+.h-row b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.h-row em{font-style:normal;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.h-row small{grid-column:1/-1;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.h-none{color:var(--mut);padding-left:10px}
+@media (max-width:1100px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.cols{grid-template-columns:1fr}}
+/* Duplicates panel */
+.d-kinds{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.d-kinds button{border-radius:20px;padding:3px 10px;color:var(--mut)}
+.d-kinds button.on{background:#e6e9ef;border-color:#e6e9ef;color:#0c0e12}
+.d-sum{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;color:var(--mut)}
+.d-sum b{color:var(--fg)}
+.dg{border:1px solid var(--line);border-radius:10px;margin:0 0 10px;overflow:hidden}
+.dg-h{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#171b22}
+.dg-h div{flex:1;min-width:0}
+.dg-h b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dg-h span{color:var(--mut);font-size:12px}
+.dg-r{display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid var(--line);font-size:12px}
+.dg-r code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tag{flex-shrink:0;font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+.tag.keep{color:#7ad9a6;border-color:#24503a}
 /* Search palette: the map blurs behind it, results are cards whose top edge measures their size */
 #palette{position:fixed;inset:0;z-index:14;display:flex;justify-content:center;align-items:flex-start;padding-top:8vh;background:rgba(6,7,10,.5);-webkit-backdrop-filter:blur(16px) saturate(1.3);backdrop-filter:blur(16px) saturate(1.3);animation:fadein .16s ease-out}
 @keyframes fadein{from{opacity:0}}
@@ -87,8 +133,11 @@ body.live .bottom,body.live .top button,body.live #status{display:none}
 .seg button.on{background:#262b35;color:var(--fg)}
 
 #list{overflow:auto;margin:0 8px 8px;border-radius:8px;background:var(--gut);padding:4px 0}
-.row{display:grid;grid-template-columns:16px auto 10px minmax(0,1fr) minmax(60px,200px) 72px 52px 26px;align-items:center;gap:10px;height:34px;margin:0 4px;padding:0 8px 0 10px;border-radius:6px;cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .12s,opacity .2s}
+.row{position:relative;display:grid;grid-template-columns:16px auto 10px minmax(0,1fr) 84px 56px 26px;align-items:center;gap:10px;height:36px;margin:0 4px;padding:0 8px 0 10px;border-radius:6px;cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .12s,opacity .2s}
 .row:hover{background:#171b22}
+/* The row's size as a bar behind it, in its category color */
+.row::before,.h-row::before{content:"";position:absolute;left:0;top:3px;bottom:3px;width:var(--w,0);border-radius:6px;background:var(--c);opacity:.2;pointer-events:none}
+.row>*,.h-row>*{position:relative}
 .row.dim{opacity:.25}
 .tw{display:grid;place-items:center;width:12px;margin-left:calc(var(--d,0) * 20px);transition:transform .15s}
 .ck{width:15px;height:15px;border-radius:4px;border:1.5px solid #3a404c;display:grid;place-items:center;transition:border-color .12s,background .12s}
@@ -108,9 +157,7 @@ body.live .bottom,body.live .top button,body.live #status{display:none}
 .dot{width:10px;height:10px;border-radius:3px}
 .rn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .rn small{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--mut);margin-left:10px}
-.rb{height:6px;border-radius:3px;background:#1a1e26;overflow:hidden}
-.rb i{display:block;height:100%;border-radius:3px}
-.rs{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.rs{text-align:right;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums}
 .rp{text-align:right;color:var(--mut);font-variant-numeric:tabular-nums}
 .row .more{opacity:0;border:0;background:none;padding:0;color:var(--mut);font-size:16px;line-height:1}
 .row:hover .more{opacity:1}
@@ -205,20 +252,22 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 <body>
 <header>
   <div class="top">
-    <div class="brand">Evict<span>.</span></div>
-    <nav id="crumbs"></nav>
-    <button id="cur-more" class="icon" title="Actions for this folder" aria-label="Actions for this folder">⋯</button>
+    <div class="brand"><svg viewBox="0 0 20 20" aria-hidden="true"><rect width="11" height="20" rx="2.5" fill="#e0473d"/><rect x="12" width="8" height="12" rx="2.5" fill="#e0921f"/><rect x="12" y="13" width="8" height="7" rx="2.5" fill="#3d7fe6"/></svg><b>Evict<span>.</span></b></div>
     <button id="search" class="search" title="Search (⌘K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><span>Search files, folders or .ext</span><kbd>⌘K</kbd></button>
+    <button id="dupes">Duplicates</button>
     <button id="cur-wins" class="ai"></button>
   </div>
   <div class="bottom">
-    <div class="seg" id="views"><button data-v="map">Map</button><button data-v="list">List</button></div>
-    <div id="legend"></div>
+    <div class="seg" id="views"><button data-v="home">Home</button><button data-v="map">Map</button><button data-v="list">List</button></div>
+    <nav id="crumbs"></nav>
+    <button id="cur-more" class="icon" title="Actions for this folder" aria-label="Actions for this folder">⋯</button>
     <div id="places"></div>
     <button id="masked" hidden></button>
     <button id="cur-rm" class="danger" hidden></button>
   </div>
+  <div class="cats" id="cats"><div id="legend"></div></div>
 </header>
+<div id="home" hidden></div>
 <div id="map"></div>
 <div id="list" hidden></div>
 <footer id="status"><span id="stats"></span><span id="keys"><kbd>⌘K</kbd>Search<kbd>Space</kbd>Preview<kbd>⌘</kbd>Click to select<kbd>⌫</kbd>Back</span></footer>
@@ -478,6 +527,7 @@ if (D) {
     const h = '#' + encodeURIComponent(p);
     flash = target;
     closePalette();
+    if (view === 'home') view = 'map';  // opening a folder or a file shows it on the map
     if (location.hash === h) render(true); else location.hash = h;
   };
 
@@ -711,7 +761,7 @@ ${rules}`;
     resetMemo();
     D.free += size; stats();
     toast(`${fmt(size)} freed`);
-    go(root[0]);
+    view === 'home' ? render(false) : go(root[0]);
   };
 
   // Places to check on any disk: the Trash, where "Move to Trash" sends things, and every Downloads folder
@@ -897,32 +947,32 @@ ${rules}`;
   }
 
   // List view: a size-sorted tree of the current folder, folders expand in place
-  let view = 'map', rows = [];
-  try { if (localStorage.getItem('evict.view') === 'list') view = 'list' } catch {}
+  let view = 'home', rows = [];  // each scan opens on Home
   const expanded = new Set();
   function rowEl(it, depth, base, sub, barBase = base) {
-    const r = el('div', 'row'), dot = el('i', 'dot'), bar = el('span', 'rb'), fill = el('i'), name = el('span', 'rn', label(it.n));
+    const r = el('div', 'row'), dot = el('i', 'dot'), name = el('span', 'rn', label(it.n));
     const cat = it.n.cat || (isDir(it.n) ? dominant(it.n, it.p) : catOf(it.n, it.p));
     r.dataset.i = rows.push(it) - 1;
     r.style.setProperty('--d', depth);
     if (expanded.has(it.p) && !sub) r.classList.add('open');
-    dot.style.background = fill.style.background = CATS[cat][1];
-    fill.style.width = Math.max(0.5, it.v / barBase * 100) + '%';
-    bar.append(fill);
+    dot.style.background = CATS[cat][1];
+    r.style.setProperty('--c', CATS[cat][1]);
+    r.style.setProperty('--w', Math.max(0.5, it.v / barBase * 100) + '%');
     if (sub) name.append(el('small', '', sub));
-    r.append(el('span', selectable(it) ? 'ck' : ''), el('span', isDir(it.n) && it.p && !sub ? 'tw dir' : 'tw'), dot, name, bar, el('span', 'rs', fmt(it.v)), el('span', 'rp', pct(it.v / base)), it.p ? el('button', 'more', '⋯') : el('span'));
+    r.append(el('span', selectable(it) ? 'ck' : ''), el('span', isDir(it.n) && it.p && !sub ? 'tw dir' : 'tw'), dot, name, el('span', 'rs', fmt(it.v)), el('span', 'rp', pct(it.v / base)), it.p ? el('button', 'more', '⋯') : el('span'));
     return r;
   }
   function renderList() {
     const frag = document.createDocumentFragment();
     const add = (nodes, p, depth) => {
       for (const it of itemsOf(nodes, p)) {
-        frag.append(rowEl(it, depth, viewSize));
+        frag.append(rowEl(it, depth, viewSize, null, top));
         if (it.p && isDir(it.n) && expanded.has(it.p)) add(it.n[2], it.p, depth + 1);
       }
     };
     rows = []; lastPick = null;
-    add([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0);
+    const nodes = [...cur[2], ...(stack.length === 1 ? extra : [])], top = itemsOf(nodes, curPath)[0]?.v || 1;  // the biggest row fills the width
+    add(nodes, curPath, 0);
     $('list').replaceChildren(frag);
   }
   // Searches the whole scan, hidden folders excluded; the scanner groups files under 1 MB, so those can't be found.
@@ -1041,6 +1091,7 @@ ${rules}`;
   }
   const jump = it => isDir(it.n) && !BUNDLE.test(it.n[0]) ? go(it.p) : go(it.p.slice(0, it.p.lastIndexOf('/')) || '/', it.p);
   $('search').onclick = openPalette;
+  $('search').querySelector('span').textContent = `Search ${nf(D.count, 0)} items, or type .mov`;
   $('q').addEventListener('input', () => { clearTimeout(palTimer); palTimer = setTimeout(renderPalette, 100) });
   $('palette').addEventListener('mousedown', e => { if (e.target === $('palette')) closePalette() });
   $('pal-res').addEventListener('mousemove', e => { const c = e.target.closest('.card'); if (c && +c.dataset.i !== active) setActive(+c.dataset.i, false) });
@@ -1069,6 +1120,164 @@ ${rules}`;
       const sel = picks().map(([p]) => p);
       sel.length ? previewPaths(sel) : isArchive(it) ? (closePalette(), showArchive(it)) : previewPaths([it.p]);
     }
+  }
+
+  // Duplicates: files of the same size and type are candidates, the app then compares their contents
+  const KINDS = {
+    all: ['All files', null],
+    video: ['Videos', /\.(mov|mp4|m4v|mkv|avi|webm)$/i],
+    image: ['Photos', /\.(jpe?g|png|heic|gif|tiff?|psd|raw|cr2|nef|arw|dng|webp)$/i],
+    audio: ['Audio', /\.(mp3|wav|aiff?|flac|m4a|aac)$/i],
+    arch: ['Archives & disk images', ARCH],
+    doc: ['Documents', /\.(pdf|docx?|xlsx?|pptx?|pages|numbers|key|txt|csv|epub)$/i],
+  };
+  let dupeKind = 'all', dupeSizes = new Map();
+  // Not in system folders, app data (~/Library), bundles, hidden or regenerable folders: copies there are managed by apps
+  function dupeCandidates(kind) {
+    const re = KINDS[kind][1], by = new Map();
+    dupeSizes = new Map();
+    const walk = (n, p) => {
+      for (const k of n[2]) {
+        const kp = kidPath(p, k), v = kp ? total(k, kp) : 0;
+        if (!v) continue;
+        if (isDir(k)) {
+          if (!SYS.test(kp) && !BUNDLE.test(k[0]) && !JUNK.test(k[0]) && k[0][0] !== '.' && kp !== D.home + '/Library') walk(k, kp);
+          continue;
+        }
+        if (re && !re.test(k[0]) || !canRm(kp)) continue;
+        const key = v + '|' + extOf(k[0]);
+        dupeSizes.set(kp, v);
+        by.has(key) ? by.get(key).push(kp) : by.set(key, [kp]);
+      }
+    };
+    walk(root, root[0]);
+    return [...by.values()].filter(g => g.length > 1);
+  }
+  function showDupes(kind = dupeKind) {
+    dupeKind = kind;
+    const groups = dupeCandidates(kind), files = groups.reduce((sum, g) => sum + g.length, 0);
+    const id = openPanel('Duplicates', 'Duplicate files', files ? `${nf(files, 0)} files share a size and type with another` : 'Among files of 1 MB or more', 'Comparing the files', 'Comparing');
+    if (!app || !groups.length) return evictDupes(id, {sets: groups.map(g => g.map(p => [p, -1])), unverified: !app});
+    app.postMessage({action: 'dupes', id, groups});
+  }
+  // Called by the macOS app with the sets of identical files and each one's private size (-1: unknown)
+  window.evictDupes = (id, res) => {
+    if (id !== askId || $('ai').hidden) return;
+    clearInterval(timer);
+    $('ai-status').textContent = res.unverified ? 'Not compared' : `Compared in ${secs()} s`;
+    const kinds = el('div', 'd-kinds');
+    for (const [k, [name]] of Object.entries(KINDS)) {
+      const b = el('button', k === dupeKind ? 'on' : '', name);
+      b.onclick = () => showDupes(k);
+      kinds.append(b);
+    }
+    // Each set keeps the copy with the shortest path, usually the original place. A copy whose private size is
+    // near zero is an APFS clone: it shares its blocks, so deleting it frees almost nothing
+    const sets = res.sets.map(files => {
+      const size = dupeSizes.get(files[0][0]) || 0;
+      files.sort((a, b) => a[0].length - b[0].length || a[0].localeCompare(b[0]));
+      const extra = files.slice(1).map(([p, own]) => ({p, v: size, clone: own >= 0 && own < size / 10, own}));
+      return {files, size, extra, freed: extra.reduce((sum, x) => sum + (x.own < 0 ? size : x.own), 0)};
+    }).sort((a, b) => b.freed - a.freed);
+    const freed = sets.reduce((sum, x) => sum + x.freed, 0), body = [kinds];
+    if (!sets.length) body.push(el('p', 'ar-sum', `No duplicates among ${KINDS[dupeKind][0].toLowerCase()} of 1 MB or more.`));
+    else {
+      const sum = el('div', 'd-sum'), all = el('button', '', 'Select all extra copies'), text = el('span');
+      text.append(`${nf(sets.length, 0)} set${sets.length > 1 ? 's' : ''}: `, el('b', '', fmt(freed)), ' to free by keeping one copy of each');
+      all.onclick = () => { for (const x of sets) for (const c of x.extra) if (!c.clone) pick(c, true); syncSel() };
+      sum.append(text, all);
+      body.push(sum);
+      if (res.unverified) body.push(el('p', 'ar-sum', 'Same size and type: the contents are only compared in the app.'));
+    }
+    for (const x of sets.slice(0, 200)) {
+      const g = el('div', 'dg'), h = el('div', 'dg-h'), info = el('div'), pickAll = el('button', '', 'Select extra copies');
+      info.append(el('b', '', x.files[0][0].slice(x.files[0][0].lastIndexOf('/') + 1)), el('span', '', `${x.files.length} copies, ${fmt(x.size)} each, ${fmt(x.freed)} to free`));
+      pickAll.onclick = () => { for (const c of x.extra) if (!c.clone) pick(c, true); syncSel() };
+      h.append(info, pickAll);
+      g.append(h);
+      x.files.forEach(([p], i) => {
+        const r = el('div', 'dg-r'), code = el('code', 'path', tilde(p)), c = x.extra[i - 1];
+        r.append(code);
+        if (!i) r.append(el('span', 'tag keep', 'kept'));
+        else if (c.clone) r.append(el('span', 'tag', 'clone, frees nothing'));
+        g.append(r);
+      });
+      body.push(g);
+    }
+    $('ai-body').replaceChildren(...body);
+  };
+  $('dupes').onclick = () => showDupes();
+
+  // Home: the whole disk at a glance, then what's worth a look
+  function junkDirs() {
+    const out = [];
+    const walk = (n, p) => {
+      for (const k of n[2]) {
+        const kp = kidPath(p, k), v = kp ? total(k, kp) : 0;
+        if (!v || !isDir(k) || SYS.test(kp)) continue;
+        if (catOf(k, kp) === 'junk') out.push({n: k, p: kp, v}); else walk(k, kp);
+      }
+    };
+    walk(root, root[0]);
+    return out.sort((a, b) => b.v - a.v);
+  }
+  function homeRow(it, max) {
+    const r = el('button', 'h-row'), cat = it.n.cat || (isDir(it.n) ? dominant(it.n, it.p) : catOf(it.n, it.p));
+    r.style.setProperty('--c', CATS[cat][1]);
+    r.style.setProperty('--w', Math.max(2, it.v / max * 100) + '%');
+    // Folders show their own path (two "Library" must be told apart), files the folder they're in
+    r.append(el('b', '', label(it.n)), el('em', '', fmt(it.v)), el('small', '', tilde(isDir(it.n) && !BUNDLE.test(it.n[0]) ? it.p : it.p.slice(0, it.p.lastIndexOf('/')) || '/')));
+    r.title = it.p;
+    r.onclick = () => jump(it);
+    r.oncontextmenu = e => { e.preventDefault(); openMenu(it, e) };
+    return r;
+  }
+  function column(title, items) {
+    const c = el('section', 'h-col');
+    c.append(el('h2', '', title), ...(items.length ? items.map(it => homeRow(it, items[0].v)) : [el('p', 'h-none', 'Nothing here.')]));
+    return c;
+  }
+  function tile(icon, color, name, value, action, onclick) {
+    const t = el('div', 'tile'), l = el('div', 't-label');
+    if (icon) { l.innerHTML = ICONS[icon]; l.firstChild.style.color = color } else { const dot = el('i'); dot.style.background = color; l.append(dot) }
+    l.append(name);
+    t.append(l, el('div', 't-val', value));
+    if (action) { const b = el('button', '', action); b.onclick = onclick; t.append(b) }
+    return t;
+  }
+  function renderHome() {
+    const used = isDisk ? D.total - D.free : total(root, root[0]), m = {...mix(root, root[0])}, cap = el('div', 'cap'), legend = el('div', 'h-legend'), head = el('div', 'h-head');
+    for (const e of extra) m[e.cat] = e[1];
+    head.append(el('h1', '', isDisk ? 'Macintosh HD' : root[0]), el('p', '', isDisk ? `${fmt(used)} used of ${fmt(D.total)}, ${fmt(D.free)} free` : fmt(used)));
+    for (const c of Object.keys(CATS)) if (m[c] > 0) {
+      const seg = el('i'), k = el('button'), dot = el('i');
+      seg.style.cssText = `flex:${m[c] / 1e9} 1 0;background:${CATS[c][1]}`;
+      seg.title = `${CATS[c][0]}: ${fmt(m[c])}`;
+      cap.append(seg);
+      dot.style.background = CATS[c][1];
+      k.append(dot, CATS[c][0], el('b', '', fmt(m[c])));
+      k.title = 'Highlight on the map';
+      k.onclick = () => { focusCat = c; go(root[0]) };
+      legend.append(k);
+    }
+    if (isDisk) { const f = el('i', 'free'); f.style.flex = `${D.free / 1e9} 1 0`; f.title = `Free: ${fmt(D.free)}`; cap.append(f) }
+    const t = trash(), tv = t ? total(t.s.at(-1), t.p) : 0;
+    downloads ??= downloadsList();
+    const dv = downloads.reduce((sum, d) => sum + d.v, 0), tiles = el('div', 'tiles');
+    tiles.append(
+      tile('trash', '#a3aab7', 'Trash', tv ? fmt(tv) : 'Empty', tv ? (app ? 'Empty Trash…' : 'Open') : null, () => app ? emptyTrash(t.p, t.s.at(-1)[1]) : go(t.p)),
+      tile('down', CATS.arch[1], downloads.length > 1 ? `Downloads (${downloads.length} folders)` : 'Downloads', dv ? fmt(dv) : 'Empty', dv ? 'Open' : null, () => go(downloads[0].p)),
+      tile(null, CATS.junk[1], 'Regenerable', fmt(m.junk || 0), m.junk ? 'Show on the map' : null, () => { focusCat = 'junk'; go(root[0]) }),
+      tile(null, '#e08a6b', 'Quick wins', 'Cleanup plan', claude ? 'Ask Claude' : 'Copy the prompt', quickWins));
+    // Upper bound: every candidate set fully identical; the panel compares them for real
+    const cand = dupeCandidates('all'), maybe = cand.reduce((sum, g) => sum + (g.length - 1) * dupeSizes.get(g[0]), 0);
+    tiles.append(tile(null, CATS.media[1], 'Duplicates', maybe ? `Up to ${fmt(maybe)}` : 'None found', maybe ? 'Find duplicates' : null, () => showDupes('all')));
+    // Where the space is: what the home folder holds, next to the other top-level folders
+    const homeS = D.home && nodeAt(D.home), spots = itemsOf(root[2], root[0]).filter(it => it.p && isDir(it.n) && !(D.home || '').startsWith(it.p + '/'));
+    if (homeS) spots.push(...itemsOf(homeS.at(-1)[2], D.home).filter(it => it.p));
+    const cols = el('div', 'cols');
+    cols.append(column('Where the space is', spots.sort((a, b) => b.v - a.v).slice(0, 8)), column('Largest files', largest().slice(0, 8)), column('Regenerable', junkDirs().slice(0, 8)));
+    $('home').replaceChildren(head, cap, legend, tiles, cols);
   }
 
   // Multi-selection: it survives searches, navigation and view changes until it's deleted or cleared
@@ -1117,7 +1326,7 @@ ${rules}`;
       const a = el('a', '', i ? n[0] : (isDisk ? 'Macintosh HD' : root[0]));
       a.href = '#' + encodeURIComponent(pathOf(stack.slice(0, i + 1)));
       return i ? [el('i', '', '›'), a] : [a];
-    }));
+    }), el('span', 'here', fmt(total(cur, curPath))));
     const inTrash = trash()?.p === curPath;
     $('cur-rm').hidden = !inTrash;
     $('cur-rm').textContent = app ? 'Empty Trash…' : 'Copy empty-trash command';
@@ -1125,22 +1334,24 @@ ${rules}`;
     renderPlaces();
 
     renderLegend();  // before layout: the legend height decides the map height
-    const list = view === 'list', map = $('map');
+    const home = view === 'home', list = view === 'list', map = $('map');
     for (const b of $('views').children) b.classList.toggle('on', b.dataset.v === view);
-    map.hidden = list; $('list').hidden = !list;
+    $('home').hidden = !home; $('crumbs').hidden = $('cur-more').hidden = $('cats').hidden = home;
+    map.hidden = home || list; $('list').hidden = !list;
     hovered = undefined; hover(null);
     map.replaceChildren(); boxes = [];
-    if (list) renderList();
+    if (home) renderHome();
+    else if (list) renderList();
     else {
       lastSize = map.clientWidth + 'x' + map.clientHeight;
       layout([...cur[2], ...(stack.length === 1 ? extra : [])], curPath, 0, 0, map.clientWidth, map.clientHeight, 0);
       map.append(ring2, ring);
     }
-    const shown = list ? $('list') : map;
+    const shown = home ? $('home') : list ? $('list') : map;
     if (fade && !matchMedia('(prefers-reduced-motion: reduce)').matches) shown.animate([{opacity: 0}, {opacity: 1}], {duration: 180, easing: 'ease-out'});
     applyFocus();
     syncSel();
-    if (flash) {
+    if (flash && !home) {
       const i = (list ? rows : boxes).findIndex(it => it.p === flash);
       const node = i >= 0 && shown.querySelector(`[data-i="${i}"]`);
       if (node) { node.classList.add('found'); if (list) node.scrollIntoView({block: 'center'}) }
@@ -1194,7 +1405,6 @@ ${rules}`;
   $('list').addEventListener('contextmenu', e => { const it = rowAt(e); e.preventDefault(); if (it?.p) openMenu(it, e) });
   for (const b of $('views').children) b.onclick = () => {
     view = b.dataset.v;
-    try { localStorage.setItem('evict.view', view) } catch {}
     render(true);
   };
   $('cur-more').onclick = e => {
