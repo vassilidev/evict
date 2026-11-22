@@ -317,7 +317,7 @@ const CATS = {
   misc:   ['Small files', '#394050'],
   hidden: ['Invisible', '#2a2e37'],
 };
-const JUNK = /^(node_modules|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
+const JUNK = /^(node_modules|site-packages|bower_components|\.tox|\.bundle|\.cargo|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
 const ARCH = /\.(zip|dmg|iso|pkg|tar|gz|tgz|bz2|xz|7z|rar|xip|raw|img|qcow2|vmdk|vdi|ipsw|sparseimage|sparsebundle|bak)$/i;
 const MEDIA = /\.(mov|mp4|m4v|mkv|avi|webm|jpe?g|png|heic|gif|tiff?|psd|cr2|nef|arw|dng|mp3|wav|aiff?|flac|m4a|aac|photoslibrary|fcpbundle|imovielibrary|logicx|band)$/i;
 const SYS = /^\/(System|private|usr|bin|sbin|cores)(\/|$)/;
@@ -751,7 +751,6 @@ ${rules}`;
     if (gone) go(gone.slice(0, gone.lastIndexOf('/')) || '/'); else render(false);
   };
 
-  // Called by the macOS app once the Trash has been emptied
   window.evictEmptied = path => {
     const s = nodeAt(path);
     if (!s) return;
@@ -1025,7 +1024,6 @@ ${rules}`;
     walk(root, root[0]);
     return [...m].sort((a, b) => b[1][0] - a[1][0]);
   }
-  // The search palette
   let cards = [], active = 0, palPick = null, palTimer;
   function openPalette() {
     closeMenu();

@@ -50,6 +50,12 @@ jobs:
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: ./build.sh dmg
 
+      - name: Check the page
+        run: |
+          page=.build/Evict.app/Contents/Resources/index.html
+          grep -q 'window.DATA = null; /\* __DATA__ \*/' "$page"
+          test "$(wc -c < "$page")" -lt "$(wc -c < index.html)"  # the minifier really ran
+
       - name: Check the signature
         if: env.SIGNED == 'true'
         run: |

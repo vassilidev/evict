@@ -174,14 +174,15 @@ static int is_deps(const char *name) {
 }
 
 static void scan_dir(Job j, char *buf, Stack *local) {
-    Node *dir = j.node, *sum = j.sum ? j.sum : dir && is_deps(dir->name) ? dir : NULL;
+    Node *dir = j.node, *sum = j.sum ? j.sum : dir && !dir->path && is_deps(dir->name) ? dir : NULL;
     int fd = j.parent ? openat(j.parent->fd, dir ? dir->name : j.name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
                       : open(root, O_RDONLY | O_DIRECTORY);
     free(j.name);
     // The tree is being printed: a thread released late by a privacy prompt must not touch it
     if (atomic_load(&stopping)) { if (fd >= 0) close(fd); return; }
     if (j.parent) release(j.parent);
-    if (fd < 0) { if (dir) dir->err = 1; return; }
+    Node *owner = dir ? dir : sum;  // a folder inside a dependency folder reports its errors on that folder
+    if (fd < 0) { __atomic_store_n(&owner->err, 1, __ATOMIC_RELAXED); return; }
     Dir *me = malloc(sizeof *me);
     if (!me) { perror("malloc"); exit(1); }
     me->fd = fd;
@@ -197,9 +198,10 @@ static void scan_dir(Job j, char *buf, Stack *local) {
     size_t first = local->n;
     for (;;) {
         int r = getattrlistbulk(fd, &al, buf, BUF_SIZE, 0);
-        if (r <= 0) { if (r < 0 && dir) dir->err = 1; break; }
+        if (r <= 0) { if (r < 0) __atomic_store_n(&owner->err, 1, __ATOMIC_RELAXED); break; }
         char *next = buf;
         for (int i = 0; i < r; i++) {
+            if (atomic_load_explicit(&stopping, memory_order_relaxed)) break;
             // Entry layout: length, returned attrs, error, then requested attrs in bit order
             char *cur = next;
             uint32_t len;
@@ -270,6 +272,7 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                 }
             }
         }
+        if (atomic_load_explicit(&stopping, memory_order_relaxed)) break;
     }
     // Several threads add up the same dependency folder
     if (sum) {
@@ -415,6 +418,7 @@ int main(int argc, char **argv) {
         if (now != last) { last = now; still = 0; }
         else if (++still >= 300) {
             atomic_store(&stopping, 1);
+            usleep(200000);  // lets a thread in the middle of a directory see the flag before the tree is read
             fprintf(stderr, "\nScan stalled on a macOS permission prompt: partial results. "
                             "Give Full Disk Access to see everything.\n");
             break;

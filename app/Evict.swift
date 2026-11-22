@@ -300,12 +300,16 @@ final class Model: ObservableObject {
         alert.addButton(withTitle: "Empty Trash").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let failed = items.filter { (try? FileManager.default.removeItem(atPath: (path as NSString).appendingPathComponent($0))) == nil }
-        if !failed.isEmpty {
-            inform("Some items couldn’t be deleted", "\(failed.count) item\(failed.count > 1 ? "s belong" : " belongs") to another user or are in use. Empty the Trash from the Finder to remove them.")
+        let paths = items.map { (path as NSString).appendingPathComponent($0) }
+        let deleted = paths.filter { (try? FileManager.default.removeItem(atPath: $0)) != nil }
+        guard deleted.count < paths.count else {
+            guard let arg = try? String(data: JSONEncoder().encode(path), encoding: .utf8) else { return }
+            webView?.evaluateJavaScript("evictEmptied(\(arg))")
+            return
         }
-        guard let arg = try? String(data: JSONEncoder().encode(path), encoding: .utf8) else { return }
-        webView?.evaluateJavaScript("evictEmptied(\(arg))")
+        removed(deleted, freed: true)
+        let left = paths.count - deleted.count
+        inform("Some items couldn’t be deleted", "\(left) item\(left > 1 ? "s belong" : " belongs") to another user or are in use. Empty the Trash from the Finder to remove them.")
     }
 
     // Secrets (.env, private keys, credentials) found in what's about to be deleted. A quick look: heavy dependency
@@ -421,7 +425,11 @@ final class Model: ObservableObject {
     // Lists an archive with the system's bsdtar (zip, rar, 7z, tar.*, iso, xar, cpio…), biggest files first
     func listArchive(id: Int, path: String) {
         cancelAsk()
-        let process = Process(), out = Pipe(), err = Pipe()
+        let process = Process(), out = Pipe()
+        // tar's warnings go to a file: a full stderr pipe would block tar before stdout ends
+        let errURL = FileManager.default.temporaryDirectory.appendingPathComponent("evict-tar-\(UUID().uuidString).log")
+        FileManager.default.createFile(atPath: errURL.path, contents: nil)
+        guard let err = try? FileHandle(forWritingTo: errURL) else { return send("evictArchive", id, ["error": "Can’t read this archive."]) }
         process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
         process.arguments = ["-tvf", path]
         process.environment = ["LC_ALL": "en_US.UTF-8"]  // names in UTF-8, not escaped
@@ -442,8 +450,11 @@ final class Model: ObservableObject {
                 }
             } catch {}
             if running === process { running = nil }
+            try? err.close()
+            let log = (try? String(contentsOf: errURL, encoding: .utf8)) ?? ""
+            try? FileManager.default.removeItem(at: errURL)
             guard !files.isEmpty else {
-                let message = String(decoding: err.fileHandleForReading.availableData, as: UTF8.self)
+                let message = String(log.split(separator: "\n").last ?? "")
                     .replacingOccurrences(of: "tar: ", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
                 return send("evictArchive", id, ["error": message.isEmpty ? "This archive is empty." : message])
             }
@@ -473,13 +484,27 @@ final class Model: ObservableObject {
         var sets: [[[Any]]] = []
         for group in groups {
             if Task.isCancelled { break }
-            var byPrint: [String: [[Any]]] = [:]
-            for path in group {
-                if let key = fingerprint(path) { byPrint[key, default: []].append([path, privateSize(path) ?? -1]) }
+            var bySample: [String: [String]] = [:]
+            for path in group { if let key = fingerprint(path) { bySample[key, default: []].append(path) } }
+            // The sample only narrows things down: copies are confirmed on their whole content before being offered
+            for sample in bySample.values where sample.count > 1 {
+                var byContent: [String: [[Any]]] = [:]
+                for path in sample {
+                    if Task.isCancelled { return [] }
+                    if let key = fullHash(path) { byContent[key, default: []].append([path, privateSize(path) ?? -1]) }
+                }
+                sets += byContent.values.filter { $0.count > 1 }
             }
-            sets += byPrint.values.filter { $0.count > 1 }
         }
         return sets
+    }
+
+    nonisolated static func fullHash(_ path: String) -> String? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        var hash = SHA256()
+        while !Task.isCancelled, let data = try? handle.read(upToCount: 8 << 20), !data.isEmpty { hash.update(data: data) }
+        return hash.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     // Size, then SHA-256 of the first, middle and last megabyte: enough to tell copies apart without reading them whole
@@ -641,7 +666,6 @@ struct WebView: NSViewRepresentable {
     }
 }
 
-// Splits a pipe's chunks into lines
 final class LineBuffer: @unchecked Sendable {
     private var pending = Data()
 
@@ -767,11 +791,20 @@ enum Updater {
         let staged = app.deletingLastPathComponent().appendingPathComponent(".Evict-update.app")
         try? FileManager.default.removeItem(at: staged)
         try run("/usr/bin/ditto", mount.appendingPathComponent("Evict.app").path, staged.path)
-        guard Bundle(url: staged)?.bundleIdentifier == Bundle.main.bundleIdentifier else {
+        guard Bundle(url: staged)?.bundleIdentifier == Bundle.main.bundleIdentifier, signedByEvict(staged) else {
             try? FileManager.default.removeItem(at: staged)
-            throw failure("The downloaded file doesn’t contain Evict.")
+            throw failure("The downloaded file isn’t an Evict signed by its developer.")
         }
         _ = try FileManager.default.replaceItemAt(app, withItemAt: staged)
+    }
+
+    // Only an app signed with Evict's Developer ID (team 7F3RB38CZ2) may replace this one
+    static func signedByEvict(_ app: URL) -> Bool {
+        var code: SecStaticCode?, requirement: SecRequirement?
+        let rule = "anchor apple generic and certificate leaf[subject.OU] = \"7F3RB38CZ2\"" as CFString
+        guard SecStaticCodeCreateWithPath(app as CFURL, [], &code) == errSecSuccess, let code,
+              SecRequirementCreateWithString(rule, [], &requirement) == errSecSuccess else { return false }
+        return SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate), requirement) == errSecSuccess
     }
 
     static func commandLine() -> Never {
