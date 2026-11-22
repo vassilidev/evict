@@ -4,7 +4,7 @@ name: Website
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'minify.py', '.github/workflows/pages.yml']
+    paths: ['docs/**', '!docs/*.md', 'minify.py', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -28,6 +28,7 @@ jobs:
       - name: Minify the pages
         run: |
           cp -R docs _site
+          rm -f _site/*.md  # the guides are read on GitHub, not on the site
           for page in docs/*.html; do
             python3 minify.py "$page" "_site/${page#docs/}"
             printf '%s: %s → %s bytes\n' "$page" "$(wc -c < "$page")" "$(wc -c < "_site/${page#docs/}")"

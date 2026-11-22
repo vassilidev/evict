@@ -64,9 +64,6 @@ Section
     File "../.build/windows/x86/*"
   ${EndIf}
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  ; Walks the Windows folder once, hidden, and keeps its sizes: the first scan already skips it
-  nsExec::Exec '"$INSTDIR\evict-scan.exe" "$WINDIR"'
-  Pop $0
   CreateShortcut "$SMPROGRAMS\Evict.lnk" "$INSTDIR\Evict.exe"
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   WriteRegStr HKCU "${UNINSTALL}" "DisplayName" "Evict"

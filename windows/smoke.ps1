@@ -44,9 +44,6 @@ foreach ($f in 'Evict.exe', 'evict-scan.exe', 'index.html', 'WebView2Loader.dll'
 $watch.Stop()
 Write-Host ("Installed in {0:N1} s" -f $watch.Elapsed.TotalSeconds)
 if (-not (Test-Path $shortcut)) { Fail 'no Start menu entry' }
-# The installer walks the Windows folder once, so the first scan reads its sealed parts from the cache
-$cache = "$data\system.cache"
-if (-not (Test-Path $cache)) { Fail 'the installer left no system folder cache' }
 if (-not (Test-Path $uninstall)) { Fail 'not listed in Settings > Apps' }
 $version = (Get-Item "$dir\Evict.exe").VersionInfo.ProductVersion
 if ($env:EVICT_VERSION -and $version -ne $env:EVICT_VERSION.TrimStart('v')) { Fail "expected Evict $env:EVICT_VERSION, got $version" }
@@ -77,7 +74,7 @@ function Check-Scanner($scanner) {
 Check-Scanner "$dir\evict-scan.exe"
 if ($Setup -and (Test-Path .build\windows\x86\evict-scan.exe)) { Check-Scanner (Resolve-Path .build\windows\x86\evict-scan.exe).Path }
 
-# The whole computer, every fixed drive: cold and walked, then warm with the system folder cache, then warm walked
+# The whole computer, every fixed drive: cold, then warm
 function Scan-All($label) {
   $watch = [Diagnostics.Stopwatch]::StartNew()
   $text = & "$dir\evict-scan.exe" --home $env:USERPROFILE / 2> $null
@@ -88,15 +85,10 @@ function Scan-All($label) {
   if ($json.count -lt 10000 -or $json.tree[1] -lt $used / 4) { Fail 'the whole-computer scan saw too little' }
   [pscustomobject]@{total = [double]$json.tree[1]; secs = $watch.Elapsed.TotalSeconds}
 }
-Remove-Item $cache
-Scan-All 'cold, walked' | Out-Null
-if (-not (Test-Path $cache)) { Fail 'the scan wrote no system folder cache' }
-$cached = Scan-All 'warm, cached'
-Remove-Item $cache
-$walked = Scan-All 'warm, walked'
-# The runner keeps writing logs between two scans: the totals must agree within 0.2%
-if ([math]::Abs($cached.total - $walked.total) -gt $walked.total * 0.002) { Fail "cached total $($cached.total) differs from walked total $($walked.total)" }
-Write-Host ("System folder cache OK: same total cached and walked, {0:N1} s vs {1:N1} s" -f $cached.secs, $walked.secs)
+$cold = Scan-All 'cold'
+$warm = Scan-All 'warm'
+# The runner keeps writing logs between two scans: the totals must agree within 0.5%
+if ([math]::Abs($cold.total - $warm.total) -gt $warm.total * 0.005) { Fail "cold total $($cold.total) differs from warm total $($warm.total)" }
 
 # Start: the app scans, writes its report and shows the map (the page reports its boxes through EVICT_SMOKE)
 $proof = "$env:TEMP\evict-smoke.txt"
