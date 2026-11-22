@@ -83,11 +83,40 @@ function Scan-All($label) {
   $used = $json.total - $json.free
   Write-Host ("Whole computer, {0}: {1:N0} items, {2:N2} GB of {3:N1} GB used seen, in {4:N1} s, root {5}" -f $label, $json.count, ($json.tree[1] / 1e9), ($used / 1e9), $watch.Elapsed.TotalSeconds, $json.tree[0])
   if ($json.count -lt 10000 -or $json.tree[1] -lt $used / 4) { Fail 'the whole-computer scan saw too little' }
-  [pscustomobject]@{total = [double]$json.tree[1]; secs = $watch.Elapsed.TotalSeconds}
+  [pscustomobject]@{total = [double]$json.tree[1]; secs = $watch.Elapsed.TotalSeconds; tree = $json.tree}
 }
-# Not compared: Windows Server keeps changing about a gigabyte of its disk in the background between two scans
-Scan-All 'cold' | Out-Null
-Scan-All 'warm' | Out-Null
+# Folder sizes by path, four levels deep, to see where two scans differ
+function Sizes($node, $path, $depth, $out) {
+  if ($null -eq $node[0]) { return }
+  $p = if ($null -eq $path) { $node[0] } elseif ($path -eq '/') { "/$($node[0])" } else { "$path/$($node[0])" }
+  $out[$p] = [double]$node[1]
+  if ($depth -lt 4 -and $node.Count -ge 3 -and $node[2] -is [array]) { foreach ($k in $node[2]) { Sizes $k $p ($depth + 1) $out } }
+}
+function Compare-Scans($a, $b, $label) {
+  $sa = @{}; $sb = @{}
+  Sizes $a.tree $null 0 $sa
+  Sizes $b.tree $null 0 $sb
+  $rows = foreach ($p in ($sa.Keys + $sb.Keys | Sort-Object -Unique)) {
+    $d = $sa[$p] - $sb[$p]
+    if ([math]::Abs($d) -gt 50e6) { [pscustomobject]@{path = $p; a = $sa[$p]; b = $sb[$p]; diff = $d} }
+  }
+  Write-Host "Biggest differences, $label (MB):"
+  $rows | Sort-Object { -[math]::Abs($_.diff) } | Select-Object -First 25 |
+    ForEach-Object { Write-Host ("  {0,10:N0} {1,10:N0} {2,10:N0}  {3}" -f ($_.a / 1e6), ($_.b / 1e6), ($_.diff / 1e6), $_.path) }
+}
+# Windows and System32 are cached: walked cold (filling the cache), read from the cache, then walked again
+$cache = "$data\system.cache"
+Remove-Item $cache -ErrorAction SilentlyContinue
+$cold = Scan-All 'cold, walked'
+if (-not (Test-Path $cache)) { Fail 'the scan wrote no system folder cache' }
+$cached = Scan-All 'warm, cached'
+Remove-Item $cache
+$walked = Scan-All 'warm, walked'
+Compare-Scans $cached $walked 'cached vs walked'
+Compare-Scans $cold $walked 'cold walked vs warm walked'
+# Windows Server changes about a gigabyte in the background between scans: the cache must not add more than that
+if ([math]::Abs($cached.total - $walked.total) -gt 1.5e9) { Fail "cached total $($cached.total) differs from walked total $($walked.total)" }
+Write-Host ("System folder cache OK: {0:N1} s cached vs {1:N1} s walked" -f $cached.secs, $walked.secs)
 
 # Start: the app scans, writes its report and shows the map (the page reports its boxes through EVICT_SMOKE)
 $proof = "$env:TEMP\evict-smoke.txt"
