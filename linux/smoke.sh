@@ -15,9 +15,10 @@ if command -v apt-get > /dev/null; then
 elif command -v dnf > /dev/null; then
   dnf install -y xorg-x11-server-Xvfb dbus-daemon > /dev/null 2>&1 || nodisplay=1  # RHEL 10 and its rebuilds dropped the X server
 elif command -v zypper > /dev/null; then
-  quiet zypper --non-interactive install xorg-x11-server-Xvfb dbus-1-daemon
+  quiet zypper --non-interactive install xorg-x11-server-Xvfb /usr/bin/dbus-run-session  # dbus-1 or dbus-1-daemon
 elif command -v pacman > /dev/null; then
-  quiet pacman -Sy --noconfirm --needed xorg-server-xvfb dbus
+  # Container images lag behind the repositories: upgrade fully first, like any Arch system (no partial upgrades)
+  quiet pacman -Syu --noconfirm --needed xorg-server-xvfb dbus
 fi
 
 EVICT_FILE="$1" sh docs/install.sh > /tmp/evict-install.log 2>&1 || { cat /tmp/evict-install.log; echo "FAIL: install"; exit 1; }

@@ -85,17 +85,21 @@ say "→ Installing"
 case $kind in
   deb)
     # Package lists can be missing or stale (fresh systems, containers): refresh them once if WebKitGTK can't be found
-    root apt-get install -y "$file" || { root apt-get update && root apt-get install -y "$file"; } ;;
+    if ! root apt-get install -y "$file"; then
+      root apt-get update || die "apt couldn't refresh its package lists."
+      root apt-get install -y "$file" || die "apt couldn't install Evict."
+    fi ;;
   rpm)
     if has dnf; then
-      root dnf install -y "$file" || {
+      if ! root dnf install -y "$file"; then
         # Rocky, Alma, RHEL and CentOS Stream ship WebKitGTK 4.1 in EPEL
-        grep -qi rhel /etc/os-release || exit 1
+        grep -qi rhel /etc/os-release || die "dnf couldn't install Evict."
         say "→ Enabling EPEL for WebKitGTK"
-        root dnf install -y epel-release && root dnf install -y "$file"
-      }
-    elif has zypper; then root zypper --non-interactive install --allow-unsigned-rpm "$file"
-    else root yum install -y "$file"
+        root dnf install -y epel-release || die "couldn't enable EPEL."
+        root dnf install -y "$file" || die "dnf couldn't install Evict, even with EPEL."
+      fi
+    elif has zypper; then root zypper --non-interactive install --allow-unsigned-rpm "$file" || die "zypper couldn't install Evict."
+    else root yum install -y "$file" || die "yum couldn't install Evict."
     fi ;;
   pkg.tar.zst)
     root pacman -U --noconfirm --needed "$file" || die "pacman couldn't install it. Update your system (sudo pacman -Syu), then run this again." ;;
@@ -113,4 +117,6 @@ case $kind in
   *) die "unknown package type: $kind" ;;
 esac
 
+# A package manager can report success and still leave nothing runnable: check before saying so
+if [ "$kind" = tar.gz ]; then [ -x "$lib/evict" ]; else [ -x /usr/lib/evict/evict ]; fi || die "Evict isn't in place after the install."
 say "✓ Evict ${version:-} installed. Open it from your applications menu, or run: evict"
