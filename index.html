@@ -917,8 +917,7 @@ ${rules}`;
   }
 
   // List view: a size-sorted tree of the current folder, folders expand in place
-  let view = 'map', rows = [];
-  try { if (localStorage.getItem('evict.view') === 'list') view = 'list' } catch {}
+  let view = 'map', rows = [];  // the map always opens first
   const expanded = new Set();
   function rowEl(it, depth, base, sub, barBase = base) {
     const r = el('div', 'row'), dot = el('i', 'dot'), name = el('span', 'rn', label(it.n));
@@ -1302,12 +1301,10 @@ ${rules}`;
   $('brand').onclick = e => {
     e.preventDefault();
     view = 'map';
-    try { localStorage.setItem('evict.view', view) } catch {}
     go(root[0]);
   };
   for (const b of $('views').children) b.onclick = () => {
     view = b.dataset.v;
-    try { localStorage.setItem('evict.view', view) } catch {}
     render(true);
   };
   $('cur-more').onclick = e => {

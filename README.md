@@ -126,7 +126,7 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | Click a folder | Drill into it (map) · expand it in place (list) |
 | Double-click a folder (list) | Drill into it |
 | Click a file · right-click · `⋯` | Menu: open, show in Finder, copy path, ask AI, hide, delete |
-| **Map** / **List** | Switch views (remembered) |
+| **Map** / **List** | Switch views (the map always opens first) |
 | Click the logo | Back to the whole disk, on the map |
 | `⌘K`, `⌘F` or `/` | Search palette · `Esc` closes |
 | Checkbox · `⌘`-click · `Shift`-click · `⌘A` | Select · add to the selection · select a range · select every row shown |
