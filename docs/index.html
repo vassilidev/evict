@@ -41,9 +41,13 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;paddi
 .word span{color:var(--accent)}
 
 /* Floating navigation: a rounded bar that tightens once the page scrolls */
-.nav{position:fixed;z-index:20;top:14px;left:50%;transform:translateX(-50%);width:min(1000px,calc(100% - 24px));display:flex;align-items:center;gap:16px;padding:7px 7px 7px 18px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(19,22,28,.62);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 12px 40px rgba(0,0,0,.35);transition:width .45s var(--ease),background .3s,box-shadow .3s;animation:drop .7s var(--ease) both}
+.nav{position:fixed;z-index:20;top:14px;left:50%;transform:translateX(-50%);width:min(1000px,calc(100% - 24px));display:flex;align-items:center;gap:16px;padding:7px 7px 7px 18px;border:1px solid rgba(255,255,255,.08);border-radius:999px;background:rgba(19,22,28,.62);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);box-shadow:0 12px 40px rgba(0,0,0,.35);transition:width .45s var(--ease),padding .35s var(--ease),top .35s var(--ease),gap .35s var(--ease),background .3s,box-shadow .3s;animation:drop .7s var(--ease) both;interpolate-size:allow-keywords}
 @keyframes drop{from{opacity:0;transform:translate(-50%,-24px)}}
-.nav.scrolled{width:min(860px,calc(100% - 24px));background:rgba(19,22,28,.86);box-shadow:0 16px 50px rgba(0,0,0,.5)}
+.nav.scrolled{top:8px;width:fit-content;gap:6px;padding:4px 4px 4px 14px;background:rgba(19,22,28,.9);box-shadow:0 12px 36px rgba(0,0,0,.5)}
+.nav.scrolled .brand{font-size:16px}
+.nav.scrolled .links a{padding:6px 10px;font-size:13.5px}
+.nav.scrolled .pill{padding:4px 4px 4px 14px;font-size:14px;gap:8px}
+.nav.scrolled .pill i{width:26px;height:26px}
 .nav .brand{display:flex;align-items:center;gap:9px;font-size:18px;text-decoration:none}
 .nav .links{display:flex;gap:4px;margin:0 auto;font-size:14.5px}
 .nav .links a{color:var(--mut);text-decoration:none;padding:7px 13px;border-radius:999px;transition:color .15s,background .15s}
@@ -59,10 +63,21 @@ kbd{border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;paddi
 .pill.soft i{background:#232832}
 
 /* Hero */
-.hero{position:relative;padding:160px 0 0}
-.hero::before{content:"";position:absolute;z-index:-1;left:50%;top:430px;width:100vw;height:980px;transform:translateX(-50%);background:radial-gradient(540px 320px at 28% 40%,rgba(224,71,61,.14),transparent 70%),radial-gradient(540px 320px at 72% 45%,rgba(61,127,230,.13),transparent 70%),radial-gradient(460px 280px at 50% 72%,rgba(224,146,31,.1),transparent 70%);pointer-events:none}
-.kicker{display:inline-flex;align-items:center;gap:9px;margin:0 0 18px;color:var(--soft);font-size:15px;font-weight:600}
-.kicker::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--accent)}
+.hero{position:relative;padding:150px 0 0}
+.hero-grid{display:grid;grid-template-columns:minmax(0,9fr) minmax(0,11fr);gap:56px;align-items:center}
+.hero-grid h1{font-size:clamp(48px,6.1vw,84px);margin:0 0 22px}
+.hero-grid .trust{flex-direction:column;gap:9px;margin-top:28px}
+.hero-grid .lead{font-size:clamp(19px,2vw,24px);color:var(--soft);max-width:430px}
+/* The app runs off the right edge of the window, as in the social preview */
+.hero-shot{margin-right:calc(-1 * max(24px, (100vw - 1112px) / 2))}
+.hero-shot .win{width:calc(100% + 220px)}
+@media (max-width:960px){.hero{padding-top:120px}.hero-grid{grid-template-columns:minmax(0,1fr);gap:40px}.hero-shot{margin-right:0}.hero-shot .win{width:100%}}
+.win.windows .chrome{gap:0;padding:0 0 0 13px}
+.win.windows .chrome i{display:none}
+.win.windows .chrome b{margin-right:auto;font-size:12px;font-weight:600;color:#c7ccd6}
+.win.windows .chrome span{width:46px;text-align:center;font-size:13px;color:#8b93a1}
+.hero::after{content:"";position:absolute;z-index:-2;left:50%;top:0;width:100vw;height:900px;transform:translateX(-50%);background:linear-gradient(rgba(255,255,255,.032) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,rgba(255,255,255,.032) 1px,transparent 1px) 0 0/40px 40px;-webkit-mask-image:radial-gradient(75% 65% at 25% 35%,#000,transparent);mask-image:radial-gradient(75% 65% at 25% 35%,#000,transparent);pointer-events:none}
+.hero::before{content:"";position:absolute;z-index:-1;left:50%;top:0;width:100vw;height:900px;transform:translateX(-50%);background:radial-gradient(560px 380px at 18% 22%,rgba(224,71,61,.16),transparent 70%),radial-gradient(620px 420px at 78% 50%,rgba(61,127,230,.12),transparent 70%);pointer-events:none}
 h1{font-size:clamp(46px,7.6vw,88px);line-height:.98;letter-spacing:-.045em;margin:0 0 24px;font-weight:800;max-width:920px}
 h1 span{color:var(--accent)}
 .lead{font-size:clamp(17px,2.1vw,20px);color:var(--soft);max-width:660px;margin:0}
@@ -79,7 +94,7 @@ h1 span{color:var(--accent)}
 .trust{display:flex;flex-wrap:wrap;gap:10px 24px;margin:24px 0 0;padding:0;list-style:none;color:var(--mut);font-size:14px}
 .trust li{display:flex;align-items:center;gap:8px}
 .trust svg{width:16px;height:16px;color:var(--soft)}
-.disk{margin:66px 0 0}
+.disk{margin:84px 0 0}
 .disk-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:12px}
 .disk-head b{font-size:22px;letter-spacing:-.01em}
 .disk-head span{color:var(--mut);font-size:14.5px;font-variant-numeric:tabular-nums}
@@ -95,9 +110,7 @@ h1 span{color:var(--accent)}
 .chips li{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:20px;padding:4px 11px 4px 9px;font-size:13px;color:var(--mut)}
 .chips li b{color:var(--fg);font-weight:650}
 .chips i,.point i{width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.stage{margin:40px 0 0;perspective:1600px}
 .win{border-radius:14px;overflow:hidden;border:1px solid #2a303b;background:#0c0e12;box-shadow:0 40px 120px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02)}
-.stage .win{transform-origin:50% 0;will-change:transform}
 .win .chrome{height:32px;background:#121519;display:flex;align-items:center;gap:7px;padding:0 13px;border-bottom:1px solid #1f232b}
 .win .chrome i{width:11px;height:11px;border-radius:50%;background:#3a3f4a}
 .win .chrome i:nth-child(1){background:#ff5f57}.win .chrome i:nth-child(2){background:#febc2e}.win .chrome i:nth-child(3){background:#28c840}
@@ -460,16 +473,21 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
 
 <main class="wrap">
   <div class="hero">
-    <p class="kicker">Free disk space analyzer for macOS, Windows and Linux</p>
-    <h1>The bouncer for your disk<span>.</span></h1>
-    <p class="lead">Evict reads your whole disk in seconds and shows where every gigabyte went: a map, a list, the duplicates, the caches you can drop. Then it helps you clean up, safely. Native on macOS, Windows and Linux.</p>
-    <div class="cta" data-cta></div>
-    <ul class="trust">
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Signed and notarized on macOS</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Your files never leave your computer</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg>Open source, MIT license</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>macOS, Windows and Linux, Intel and ARM</li>
-    </ul>
+    <div class="hero-grid">
+      <div class="hero-text">
+        <h1>The bouncer for your disk<span>.</span></h1>
+        <p class="lead">Free disk space analyzer for macOS, Windows and Linux.</p>
+        <div class="cta" data-cta></div>
+        <ul class="trust">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Signed and notarized on macOS</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Your files never leave your computer</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg>Open source, MIT license</li>
+        </ul>
+      </div>
+      <div class="hero-shot">
+        <div class="win" id="hero-shot"><div class="chrome"><i></i><i></i><i></i></div><picture><source type="image/webp" srcset="screenshot-800.webp 800w, screenshot.webp 1600w" sizes="(max-width:1160px) calc(100vw - 48px), 1112px"><img src="screenshot.png" width="1600" height="1000" fetchpriority="high" alt="Evict's treemap of a whole disk: every folder as a box sized by the space it takes, colored by kind of file"></picture></div>
+      </div>
+    </div>
 
     <div class="disk" aria-label="Example: a 494 GB disk split by kind of file">
       <div class="disk-head"><b>Startup disk</b><span>410 GB used of 494 GB, 85 GB free</span></div>
@@ -494,9 +512,6 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
       </ul>
     </div>
 
-    <div class="stage">
-      <div class="win" id="hero-shot"><div class="chrome"><i></i><i></i><i></i></div><picture><source type="image/webp" srcset="screenshot-800.webp 800w, screenshot.webp 1600w" sizes="(max-width:1160px) calc(100vw - 48px), 1112px"><img src="screenshot.png" width="1600" height="1000" fetchpriority="high" alt="Evict's treemap of a whole disk: every folder as a box sized by the space it takes, colored by kind of file"></picture></div>
-    </div>
     <p class="caption">Every screenshot is taken on a fictional disk.</p>
   </div>
 
@@ -726,16 +741,19 @@ if (os === 'windows') fetch(RELEASES).then(r => r.ok ? r.json() : Promise.reject
   if (setup) for (const a of document.querySelectorAll('[data-setup]')) a.href = setup.browser_download_url;
 }).catch(() => {});
 
-// The hero screenshot starts tilted back and straightens as the page scrolls; the nav tightens
-const nav = document.getElementById('nav'), shot = document.getElementById('hero-shot');
-let ticking = false;
-function onScroll() {
-  ticking = false;
-  nav.classList.toggle('scrolled', scrollY > 40);
-  if (reduced) return;
-  const p = Math.min(1, Math.max(0, scrollY / (innerHeight * .55)));
-  shot.style.transform = `rotateX(${(1 - p) * 14}deg) scale(${.95 + p * .05})`;
+// Windows visitors see the app as it looks on Windows: its own screenshot and title bar
+if (os === 'windows') {
+  const shot = document.getElementById('hero-shot');
+  shot.classList.add('windows');
+  shot.querySelector('.chrome').innerHTML = '<b>Evict</b><span>─</span><span>☐</span><span>✕</span>';
+  shot.querySelector('source').srcset = 'screenshot-win-800.webp 800w, screenshot-win.webp 1600w';
+  Object.assign(shot.querySelector('img'), {src: 'screenshot-win.png', alt: "Evict on Windows: the C: drive as a map, each folder sized by the space it takes, Steam, Docker and Visual Studio first"});
 }
+
+// Once the page scrolls, the nav shrinks to its content
+const nav = document.getElementById('nav');
+let ticking = false;
+const onScroll = () => { ticking = false; nav.classList.toggle('scrolled', scrollY > 40) };
 addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll) } }, {passive: true});
 onScroll();
 

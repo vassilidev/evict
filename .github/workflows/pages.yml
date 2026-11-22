@@ -33,6 +33,7 @@ jobs:
             python3 minify.py "$page" "_site/${page#docs/}"
             printf '%s: %s → %s bytes\n' "$page" "$(wc -c < "$page")" "$(wc -c < "_site/${page#docs/}")"
           done
+          rm -f _site/og.html  # the source of og.png, rendered by hand
 
       - uses: actions/upload-pages-artifact@v3
         with:
