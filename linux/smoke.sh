@@ -15,7 +15,8 @@ if command -v apt-get > /dev/null; then
 elif command -v dnf > /dev/null; then
   dnf install -y xorg-x11-server-Xvfb dbus-daemon > /dev/null 2>&1 || nodisplay=1  # RHEL 10 and its rebuilds dropped the X server
 elif command -v zypper > /dev/null; then
-  quiet zypper --non-interactive install xorg-x11-server-Xvfb /usr/bin/dbus-run-session  # dbus-1 or dbus-1-daemon
+  # dbus-run-session is in dbus-1-daemon on Tumbleweed and Leap 16, in dbus-1 on Leap 15
+  quiet sh -c 'zypper -n install xorg-x11-server-Xvfb dbus-1-daemon || zypper -n install xorg-x11-server-Xvfb dbus-1'
 elif command -v pacman > /dev/null; then
   # Container images lag behind the repositories: upgrade fully first, like any Arch system (no partial upgrades)
   quiet pacman -Syu --noconfirm --needed xorg-server-xvfb dbus
