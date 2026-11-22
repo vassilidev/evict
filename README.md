@@ -114,6 +114,7 @@ Evict updates itself. Checksums, manual packages, requirements and uninstalling 
 | --- | --- |
 | **[Features](docs/features.md)** | Everything Evict does, keyboard shortcuts, what's protected, known limitations |
 | **[Install, update and build](docs/install.md)** | Every platform and its requirements, manual packages, updates, uninstalling, building from source, the command line |
+| **[Code signing policy](docs/code-signing.md)** | What's signed and by whom, the team's roles, and the privacy policy: what Evict sends over the network, and when |
 | **[How it works](docs/internals.md)** | Why the scanner is fast on each system, the project layout, the bridge between the page and the apps, CI and releases |
 | **[Website](https://vassilidev.github.io/evict/)** | The tour, the speed race and the download page with every file's checksum |
 

@@ -25,6 +25,7 @@ VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 vassilidev, MIT License"
 
 !define MUI_ICON "evict.ico"
 !define MUI_UNICON "evict.ico"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "installer.bmp"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Evict.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Open Evict"
 !insertmacro MUI_PAGE_INSTFILES
@@ -63,6 +64,7 @@ Section
   ${Else}
     File "../.build/windows/x86/*"
   ${EndIf}
+  Delete "$INSTDIR\WebView2Loader.dll"  ; shipped by 1.12.0, Evict now finds the WebView2 Runtime itself
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\Evict.lnk" "$INSTDIR\Evict.exe"
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2

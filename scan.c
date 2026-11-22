@@ -77,7 +77,7 @@ typedef struct Dir {
     fd_t fd;
     _Atomic int refs;
 #ifdef _WIN32
-    uint64_t vol;  // volume serial, mixed into file ids
+    uint64_t vol;  // the drive letter, mixed into file ids
     int ntfs;      // file ids are unique there, so hard links can be told apart
 #endif
 } Dir;
@@ -678,10 +678,11 @@ static void scan_dir(Job j, char *buf, Stack *local) {
     int ntfs = 0;
     if (from) vol = from->vol, ntfs = from->ntfs;
     else if (!BAD_FD(fd)) {
-        DWORD serial = 0;
         WCHAR fs[32] = L"";
-        GetVolumeInformationByHandleW(fd, NULL, 0, &serial, NULL, NULL, fs, 32);
-        vol = (uint64_t)serial << 48;
+        GetVolumeInformationByHandleW(fd, NULL, 0, NULL, NULL, NULL, fs, 32);
+        // An NTFS file id is a 48-bit record number under 2^32 (the most files a volume holds) and a 16-bit sequence:
+        // the drive letter goes in the record bits NTFS never uses, so files of two drives can't share a key
+        vol = (uint64_t)(unsigned char)(dname[0] == '/' ? dname[1] : dname[0]) << 40;
         ntfs = !wcscmp(fs, L"NTFS");
     }
 #else
@@ -730,9 +731,10 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                         (e->EaSize != IO_REPARSE_TAG_MOUNT_POINT && e->EaSize != IO_REPARSE_TAG_SYMLINK))
                         add_dir(&s, ename, nlen);
                 } else {
-                    // Listings don't give the link count: on NTFS every file goes through the hard link set
-                    add_file(&s, ename, nlen, (uint64_t)e->AllocationSize.QuadPart, ntfs ? 2 : 1,
-                             (uint64_t)e->FileId.QuadPart ^ vol);
+                    // Listings don't give the link count: on NTFS every file goes through the hard link set, unless it has
+                    // no real id (0 or -1, as some file system filters report): those would all look like one file
+                    uint64_t id = (uint64_t)e->FileId.QuadPart;
+                    add_file(&s, ename, nlen, (uint64_t)e->AllocationSize.QuadPart, ntfs && id + 1 > 1 ? 2 : 1, id ^ vol);
                 }
             }
             if (!e->NextEntryOffset) break;
@@ -990,8 +992,8 @@ int main(int argc, char **argv) {
 #endif
     init_skips();
 #ifdef _WIN32
-    // shortcut: the system folder cache is off on Windows: on Windows Server 2025 (CI) the cached total came out 3% above
-    // a full walk; call init_sealed() here again once both match there
+    // shortcut: the system folder cache stays off on Windows: on Windows Server 2025 (CI) the cached total still comes
+    // out 2 to 3 GB above a full walk, while Windows 11 and Server 2022 match; call init_sealed() here once 2025 does
     (void)init_sealed;
 #endif
     // In a folder the uninstaller already removes. A scan as root (pkexec on Linux) keeps its own file: it reads

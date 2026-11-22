@@ -1,6 +1,6 @@
 # How Evict works
 
-<sub>[README](../README.md) · [Features](features.md) · [Install](install.md) · [How it works](internals.md) · [Website](https://vassilidev.github.io/evict/)</sub>
+<sub>[README](../README.md) · [Features](features.md) · [Install](install.md) · [How it works](internals.md) · [Code signing](code-signing.md) · [Website](https://vassilidev.github.io/evict/)</sub>
 
 ## Why it's fast
 
