@@ -25,6 +25,7 @@ VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 vassilidev, MIT License"
 
 !define MUI_ICON "evict.ico"
 !define MUI_UNICON "evict.ico"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "installer.bmp"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Evict.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Open Evict"
 !insertmacro MUI_PAGE_INSTFILES
