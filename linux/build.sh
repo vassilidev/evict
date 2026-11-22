@@ -2,8 +2,8 @@
 # Builds Evict for Linux in .build/linux/evict: the app (GTK 3 + WebKitGTK 4.1), the scanner and the page.
 # "linux/build.sh package" also makes the release files in .build/: evict-linux-<arch>.tar.gz, plus the .deb,
 # .rpm and Arch packages when nfpm is installed (CI runs it from its Docker image).
-# Needs a C compiler and WebKitGTK 4.1 headers: libwebkit2gtk-4.1-dev (Debian, Ubuntu), webkit2gtk4.1-devel
-# (Fedora), webkit2gtk-4.1 (Arch).
+# Needs a C compiler and WebKitGTK 4.1 or 4.0 headers: libwebkit2gtk-4.1-dev (Debian, Ubuntu), webkit2gtk4.1-devel
+# (Fedora), webkit2gtk-4.1 (Arch). The app loads either version at startup, whichever the system has.
 set -e
 cd "$(dirname "$0")/.."
 version=$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' macos/Info.plist)
@@ -16,7 +16,7 @@ cc -O2 -pthread -o "$out/evict-scan" scan.c
 echo "→ Building the app"
 # shellcheck disable=SC2046
 cc -O2 -Wall -Wno-deprecated-declarations -DVERSION="\"$version\"" -o "$out/evict" linux/evict.c \
-  $(pkg-config --cflags --libs webkit2gtk-4.1)
+  $(pkg-config --cflags webkit2gtk-4.1 2> /dev/null || pkg-config --cflags webkit2gtk-4.0) $(pkg-config --libs gtk+-3.0) -ldl
 if [ .build/index.min.html -nt index.html ]; then
   cp .build/index.min.html "$out/index.html"  # minified beforehand where Node is available (CI)
 else

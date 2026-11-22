@@ -2,7 +2,7 @@ name: Release
 
 # Push a tag like v1.2.0 (matching CFBundleShortVersionString in macos/Info.plist) to publish a release.
 # With the signing secrets set, the DMG is signed with Developer ID and notarized by Apple.
-# The Linux packages are published as soon as they're built. The release only becomes "latest" (what the macOS updater
+# The Linux packages and the Windows installer are published as soon as they're built and tested. The release only becomes "latest" (what the macOS updater
 # and download links use) once its DMG is attached: Apple's notarization can take hours, so a DMG Apple hasn't
 # accepted after 30 minutes is kept as an artifact, and notarized.yml publishes it when Apple does.
 on:
@@ -123,9 +123,37 @@ jobs:
           include-hidden-files: true  # .build/ is a hidden folder
           if-no-files-found: error
 
-  publish-linux:
-    name: Publish the Linux packages
-    needs: linux
+  windows:
+    name: Windows build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the app version
+        run: |
+          version=$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' macos/Info.plist)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME doesn't match app version $version"; exit 1; }
+
+      - name: Build for x64, ARM64 and x86, and the installer
+        run: windows/build.sh package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evict-windows
+          path: |
+            .build/Evict-Setup.exe
+            .build/windows
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Install, scan, start and uninstall on Windows Server 2022 and 2025 and Windows 11 ARM64, before publishing
+  windows-test:
+    needs: windows
+    uses: ./.github/workflows/windows.yml
+
+  publish-packages:
+    name: Publish the Linux packages and the Windows installer
+    needs: [linux, windows-test]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -134,19 +162,31 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: evict-windows
+          path: windows
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           tag=$GITHUB_REF_NAME
+          cp windows/Evict-Setup.exe dist/
           ls -l dist
           gh release create "$tag" dist/* --title "Evict ${tag#v}" --generate-notes --latest=false \
             || gh release upload "$tag" dist/* --clobber
 
-  # The published release, as users get it: the website's installer on every supported distribution
+  # The published release, as users get it: the website's installers on every supported distribution and Windows
   verify-linux:
-    needs: publish-linux
+    needs: publish-packages
     uses: ./.github/workflows/linux-distros.yml
+    with:
+      version: ${{ github.ref_name }}
+
+  verify-windows:
+    needs: publish-packages
+    uses: ./.github/workflows/windows.yml
     with:
       version: ${{ github.ref_name }}

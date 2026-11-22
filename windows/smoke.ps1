@@ -30,6 +30,7 @@ if (-not ((Get-ItemProperty "HKLM:\$runtime" -ErrorAction SilentlyContinue).pv -
 }
 
 # Install
+$watch = [Diagnostics.Stopwatch]::StartNew()
 if ($Setup) {
   $env:EVICT_FILE = (Resolve-Path $Setup).Path
   Invoke-Expression (Get-Content -Raw docs/install.ps1)
@@ -40,7 +41,12 @@ if ($Setup) {
 foreach ($f in 'Evict.exe', 'evict-scan.exe', 'index.html', 'WebView2Loader.dll', 'Uninstall.exe') {
   if (-not (Test-Path "$dir\$f")) { Fail "not installed: $f" }
 }
+$watch.Stop()
+Write-Host ("Installed in {0:N1} s" -f $watch.Elapsed.TotalSeconds)
 if (-not (Test-Path $shortcut)) { Fail 'no Start menu entry' }
+# The installer walks the Windows folder once, so the first scan reads its sealed parts from the cache
+$cache = "$data\system.cache"
+if (-not (Test-Path $cache)) { Fail 'the installer left no system folder cache' }
 if (-not (Test-Path $uninstall)) { Fail 'not listed in Settings > Apps' }
 $version = (Get-Item "$dir\Evict.exe").VersionInfo.ProductVersion
 if ($env:EVICT_VERSION -and $version -ne $env:EVICT_VERSION.TrimStart('v')) { Fail "expected Evict $env:EVICT_VERSION, got $version" }
@@ -71,14 +77,26 @@ function Check-Scanner($scanner) {
 Check-Scanner "$dir\evict-scan.exe"
 if ($Setup -and (Test-Path .build\windows\x86\evict-scan.exe)) { Check-Scanner (Resolve-Path .build\windows\x86\evict-scan.exe).Path }
 
-# The whole computer, every fixed drive
-$watch = [Diagnostics.Stopwatch]::StartNew()
-$text = & "$dir\evict-scan.exe" --home $env:USERPROFILE / 2> $null
-$watch.Stop()
-$json = $text | ConvertFrom-Json
-$used = $json.total - $json.free
-Write-Host ("Whole computer: {0:N0} items, {1:N1} GB of {2:N1} GB used seen, in {3:N1} s, root {4}" -f $json.count, ($json.tree[1] / 1e9), ($used / 1e9), $watch.Elapsed.TotalSeconds, $json.tree[0])
-if ($json.count -lt 10000 -or $json.tree[1] -lt $used / 4) { Fail 'the whole-computer scan saw too little' }
+# The whole computer, every fixed drive: cold and walked, then warm with the system folder cache, then warm walked
+function Scan-All($label) {
+  $watch = [Diagnostics.Stopwatch]::StartNew()
+  $text = & "$dir\evict-scan.exe" --home $env:USERPROFILE / 2> $null
+  $watch.Stop()
+  $json = $text | ConvertFrom-Json
+  $used = $json.total - $json.free
+  Write-Host ("Whole computer, {0}: {1:N0} items, {2:N2} GB of {3:N1} GB used seen, in {4:N1} s, root {5}" -f $label, $json.count, ($json.tree[1] / 1e9), ($used / 1e9), $watch.Elapsed.TotalSeconds, $json.tree[0])
+  if ($json.count -lt 10000 -or $json.tree[1] -lt $used / 4) { Fail 'the whole-computer scan saw too little' }
+  [pscustomobject]@{total = [double]$json.tree[1]; secs = $watch.Elapsed.TotalSeconds}
+}
+Remove-Item $cache
+Scan-All 'cold, walked' | Out-Null
+if (-not (Test-Path $cache)) { Fail 'the scan wrote no system folder cache' }
+$cached = Scan-All 'warm, cached'
+Remove-Item $cache
+$walked = Scan-All 'warm, walked'
+# The runner keeps writing logs between two scans: the totals must agree within 0.2%
+if ([math]::Abs($cached.total - $walked.total) -gt $walked.total * 0.002) { Fail "cached total $($cached.total) differs from walked total $($walked.total)" }
+Write-Host ("System folder cache OK: same total cached and walked, {0:N1} s vs {1:N1} s" -f $cached.secs, $walked.secs)
 
 # Start: the app scans, writes its report and shows the map (the page reports its boxes through EVICT_SMOKE)
 $proof = "$env:TEMP\evict-smoke.txt"
@@ -94,7 +112,8 @@ $boxes = [int]((Get-Content $proof) -replace 'boxes=', '')
 if ($boxes -lt 1) { Fail 'the map is empty' }
 if (-not (Test-Path "$data\evict.html")) { Fail 'no report' }
 if ($app.HasExited) { Fail 'the app quit' }
-Write-Host "App OK: map shown with $boxes boxes"
+$secs = [regex]::Match((Get-Content -Raw "$data\evict.html"), '"secs":([0-9.]+)').Groups[1].Value
+Write-Host "App OK: map shown with $boxes boxes, its own scan (warm) took $secs s"
 $app.CloseMainWindow() | Out-Null
 if (-not $app.WaitForExit(15000)) { Stop-Process $app -Force; Fail "the app didn't close" }
 Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Wait-Process -Timeout 20 -ErrorAction SilentlyContinue

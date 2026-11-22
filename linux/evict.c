@@ -2,6 +2,7 @@
 // can't do: Trash and deletion, the file manager, previews, archives, duplicates and Claude Code answers.
 // WebKitGTK exposes the same bridge as the macOS app (window.webkit.messageHandlers.evict), so the page runs as is.
 #define _GNU_SOURCE
+#include <dlfcn.h>
 #include <errno.h>
 #include <ftw.h>
 #include <gtk/gtk.h>
@@ -23,6 +24,52 @@
 #define RELEASES "https://api.github.com/repos/vassilidev/evict/releases?per_page=10"
 
 enum { R_MAIN = 1, R_DELETE, R_COPY };
+
+// WebKitGTK 4.1 (libsoup 3) on recent distributions, 4.0 (libsoup 2) on older ones like RHEL 9, Debian 11 and Ubuntu
+// 20.04: the same API, so Evict loads whichever is installed instead of linking one
+#define WEBKIT(X)                                                                                                      \
+    X(webkit_web_view_get_type) X(webkit_web_view_run_javascript) X(webkit_web_view_new_with_user_content_manager)      \
+    X(webkit_web_view_load_uri) X(webkit_web_view_load_html) X(webkit_web_view_set_background_color)                    \
+    X(webkit_user_content_manager_new) X(webkit_user_content_manager_register_script_message_handler)                  \
+    X(webkit_user_content_manager_add_script) X(webkit_user_script_new) X(webkit_user_script_unref)                     \
+    X(webkit_javascript_result_get_js_value) X(jsc_value_object_get_property) X(jsc_value_object_get_property_at_index) \
+    X(jsc_value_to_string) X(jsc_value_is_string) X(jsc_value_to_double) X(jsc_value_is_number) X(jsc_value_to_int32)   \
+    X(jsc_value_is_object) X(jsc_value_is_array)
+#define POINTER(f) static __typeof__(f) *p_##f;
+WEBKIT(POINTER)
+
+static const char *load_webkit(void) {
+    static const char *libs[] = {"libwebkit2gtk-4.1.so.0", "libwebkit2gtk-4.0.so.37"};
+    for (size_t i = 0; i < G_N_ELEMENTS(libs); i++) {
+        void *lib = dlopen(libs[i], RTLD_NOW | RTLD_GLOBAL);
+        gboolean all = lib != NULL;
+#define RESOLVE(f) all = all && (p_##f = (__typeof__(p_##f))dlsym(lib, #f));
+        WEBKIT(RESOLVE)
+        if (all) return libs[i];
+    }
+    return NULL;
+}
+#define webkit_web_view_get_type (*p_webkit_web_view_get_type)
+#define webkit_web_view_run_javascript (*p_webkit_web_view_run_javascript)
+#define webkit_web_view_new_with_user_content_manager (*p_webkit_web_view_new_with_user_content_manager)
+#define webkit_web_view_load_uri (*p_webkit_web_view_load_uri)
+#define webkit_web_view_load_html (*p_webkit_web_view_load_html)
+#define webkit_web_view_set_background_color (*p_webkit_web_view_set_background_color)
+#define webkit_user_content_manager_new (*p_webkit_user_content_manager_new)
+#define webkit_user_content_manager_register_script_message_handler (*p_webkit_user_content_manager_register_script_message_handler)
+#define webkit_user_content_manager_add_script (*p_webkit_user_content_manager_add_script)
+#define webkit_user_script_new (*p_webkit_user_script_new)
+#define webkit_user_script_unref (*p_webkit_user_script_unref)
+#define webkit_javascript_result_get_js_value (*p_webkit_javascript_result_get_js_value)
+#define jsc_value_object_get_property (*p_jsc_value_object_get_property)
+#define jsc_value_object_get_property_at_index (*p_jsc_value_object_get_property_at_index)
+#define jsc_value_to_string (*p_jsc_value_to_string)
+#define jsc_value_is_string (*p_jsc_value_is_string)
+#define jsc_value_to_double (*p_jsc_value_to_double)
+#define jsc_value_is_number (*p_jsc_value_is_number)
+#define jsc_value_to_int32 (*p_jsc_value_to_int32)
+#define jsc_value_is_object (*p_jsc_value_is_object)
+#define jsc_value_is_array (*p_jsc_value_is_array)
 
 static GtkWidget *win, *update_btn;
 static WebKitWebView *view;
@@ -1073,6 +1120,14 @@ int main(int argc, char **argv) {
     re_example = compile("\\.(example|sample|template)$", 0);
     re_heavy = compile("^(node_modules|\\.git|vendor|Pods|DerivedData|\\.venv|venv|__pycache__|\\.next|target)$", 0);
     claude = find_claude();
+    if (!load_webkit()) {
+        gtk_init(&argc, &argv);
+        GtkWidget *d = gtk_message_dialog_new(NULL, 0, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "Evict needs WebKitGTK");
+        gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(d), "Install libwebkit2gtk-4.1 (or 4.0) with your package manager, "
+                                                 "or run the install command again: it brings it along.");
+        gtk_dialog_run(GTK_DIALOG(d));
+        return 1;
+    }
 
     GtkApplication *app = gtk_application_new(APP_ID, G_APPLICATION_FLAGS_NONE);
     const char *actions[] = {"rescan", "rescan-admin", "updates"};

@@ -3,24 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Evict · Free disk space analyzer for macOS and Linux</title>
-<meta name="description" content="Evict is a free, open source disk usage analyzer for macOS and Linux: a treemap of your whole disk, the largest files, duplicates and caches, then a safe cleanup.">
+<title>Evict · Free disk space analyzer for macOS, Windows and Linux</title>
+<meta name="description" content="Evict is a free, open source disk usage analyzer for macOS, Windows and Linux: a treemap of your whole disk, the largest files, duplicates and caches, then a safe cleanup.">
 <link rel="canonical" href="https://vassilidev.github.io/evict/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Evict">
-<meta property="og:title" content="Evict · Free disk space analyzer for macOS and Linux">
+<meta property="og:title" content="Evict · Free disk space analyzer for macOS, Windows and Linux">
 <meta property="og:description" content="The bouncer for your disk. See where every gigabyte went on a treemap, find large files, duplicates and caches, clean up safely. Free and open source.">
 <meta property="og:url" content="https://vassilidev.github.io/evict/">
 <meta property="og:image" content="https://vassilidev.github.io/evict/og.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Evict, the bouncer for your disk: a free disk space analyzer for macOS and Linux, next to its treemap">
+<meta property="og:image:alt" content="Evict, the bouncer for your disk: a free disk space analyzer for macOS, Windows and Linux, next to its treemap">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Evict · Free disk space analyzer for macOS and Linux">
+<meta name="twitter:title" content="Evict · Free disk space analyzer for macOS, Windows and Linux">
 <meta name="twitter:description" content="See where every gigabyte went on a treemap, find large files, duplicates and caches, clean up safely. Free and open source.">
 <meta name="twitter:image" content="https://vassilidev.github.io/evict/og.png">
-<meta name="twitter:image:alt" content="Evict, the bouncer for your disk: a free disk space analyzer for macOS and Linux, next to its treemap">
+<meta name="twitter:image:alt" content="Evict, the bouncer for your disk: a free disk space analyzer for macOS, Windows and Linux, next to its treemap">
 <meta name="theme-color" content="#0c0e12">
 <meta name="color-scheme" content="dark">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
@@ -190,6 +190,7 @@ h2{font-size:clamp(32px,4.4vw,50px);letter-spacing:-.035em;margin:0 0 14px;line-
 .steps li::before{content:counter(s);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#1d222b;color:var(--fg);font-weight:700;font-size:13px;position:relative;z-index:1}
 .steps li:not(:last-child)::after{content:"";position:absolute;left:13.5px;top:28px;bottom:0;width:1px;background:var(--line)}
 .steps b{color:var(--fg)}
+.terms{display:grid;gap:16px;align-content:start}
 .term{border-radius:18px;overflow:hidden;border:1px solid #2a303b;background:#0b0d10;box-shadow:0 24px 70px rgba(0,0,0,.45)}
 .term-bar{display:flex;align-items:center;gap:7px;height:42px;padding:0 10px 0 14px;background:#121519;border-bottom:1px solid #1f232b}
 .term-bar i{width:11px;height:11px;border-radius:50%;background:#3a3f4a}
@@ -275,11 +276,11 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
  "@context": "https://schema.org",
  "@type": "SoftwareApplication",
  "name": "Evict",
- "description": "A free, open source disk space analyzer for macOS and Linux: a treemap of the whole disk, the largest files, duplicate files and regenerable caches, with a safe cleanup.",
+ "description": "A free, open source disk space analyzer for macOS, Windows and Linux: a treemap of the whole disk, the largest files, duplicate files and regenerable caches, with a safe cleanup.",
  "url": "https://vassilidev.github.io/evict/",
  "downloadUrl": "https://vassilidev.github.io/evict/download.html",
  "applicationCategory": "UtilitiesApplication",
- "operatingSystem": "macOS 13+, Linux",
+ "operatingSystem": "macOS 11+, Windows 10+, Linux",
  "softwareVersion": "1.11.2",
  "screenshot": "https://vassilidev.github.io/evict/screenshot.png",
  "image": "https://vassilidev.github.io/evict/og.png",
@@ -329,7 +330,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
    "name": "Can Evict delete something by mistake?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Evict never deletes on its own. Everything goes through a confirmation that lists what will go, with the Trash as the default. The disk root, your home folder, system folders, ~/Library on macOS, ~/.config on Linux, keychains, keyrings and folders like ~/.ssh can't be deleted at all, and Evict warns you about the .env files and keys inside a folder before it goes."
+    "text": "Evict never deletes on its own. Everything goes through a confirmation that lists what will go, with the Trash as the default. The disk root, your home folder, system folders, ~/Library on macOS, AppData on Windows, ~/.config on Linux, keychains, keyrings, Windows credentials and folders like ~/.ssh can't be deleted at all, and Evict warns you about the .env files and keys inside a folder before it goes."
    }
   },
   {
@@ -345,7 +346,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
    "name": "How can it be that fast?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "It asks the system for the names and sizes of hundreds of files at a time instead of one by one (getattrlistbulk on macOS, getdents64 on Linux), never builds a full path, and runs eight threads that each walk their own part of the disk. The speed section above has the details."
+    "text": "It asks the system for the names and sizes of hundreds of files at a time instead of one by one (getattrlistbulk on macOS, NtQueryDirectoryFile on Windows, getdents64 on Linux), never builds a full path, and runs eight threads that each walk their own part of the disk. The speed section above has the details."
    }
   },
   {
@@ -366,10 +367,10 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
   },
   {
    "@type": "Question",
-   "name": "What does \"Rescan as Administrator\" do on Linux?",
+   "name": "What does \"Rescan as Administrator\" do?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "A normal user can't read everything: Docker images in /var/lib/docker, system logs, other users' homes. That space shows up as \"not visible to the scan\". Rescan as Administrator asks for your password through the system's polkit prompt and reads it all. Deleting items owned by root also asks for it."
+    "text": "A normal user can't read everything: Docker images in /var/lib/docker, system logs, other users' homes, restore points on Windows. That space shows up as \"not visible to the scan\". Rescan as Administrator asks for your password (polkit on Linux, UAC on Windows) and reads it all. Deleting items owned by the system also asks for it."
    }
   },
   {
@@ -377,7 +378,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
    "name": "Which Linux distributions are supported?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Any 64-bit desktop (x86_64 or ARM64) with glibc 2.34 or later and WebKitGTK 4.1. Evict is installed, started and uninstalled on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10 on every change. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported. The install script picks the right package for your distribution."
+    "text": "Any 64-bit desktop (x86_64 or ARM64) with glibc 2.31 or later and WebKitGTK 4.1 or 4.0. Evict is installed, started and uninstalled on Ubuntu 20.04, 22.04, 24.04 and 26.04, Debian 11, 12 and 13, Linux Mint 20, 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 9 and 10 on every change. musl distributions like Alpine aren't supported. The install script picks the right package for your distribution."
    }
   },
   {
@@ -409,7 +410,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
    "name": "Can it scan an external drive?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "The app scans your startup disk; on Linux that means every internal disk, so a separate /home partition counts. From the terminal, ./evict /Volumes/YourDrive on macOS or ./evict /media/you/YourDrive on Linux scans another one and opens the report in your browser."
+    "text": "The app scans your startup disk; on Linux that means every internal disk, so a separate /home partition counts, and on Windows every internal drive (C:, D:…). From the terminal, ./evict /Volumes/YourDrive on macOS or ./evict /media/you/YourDrive on Linux scans another one and opens the report in your browser."
    }
   },
   {
@@ -417,7 +418,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
    "name": "How does Evict compare to DaisyDisk, WinDirStat or Baobab?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "They all show where your disk space went, and Evict belongs to the same family as DaisyDisk, GrandPerspective, WinDirStat, QDirStat and GNOME's Disk Usage Analyzer (Baobab). Evict is free and open source, runs natively on macOS and Linux with the same interface, and draws a treemap like WinDirStat and QDirStat. It also groups dependency folders like node_modules into one block, marks caches you can regenerate, finds duplicate files by content, keeps system folders and secrets out of reach, and can ask Claude what a folder is before you delete it."
+    "text": "They all show where your disk space went, and Evict belongs to the same family as DaisyDisk, GrandPerspective, WinDirStat, QDirStat and GNOME's Disk Usage Analyzer (Baobab). Evict is free and open source, runs natively on macOS, Windows and Linux with the same interface, and draws a treemap like WinDirStat and QDirStat. It also groups dependency folders like node_modules into one block, marks caches you can regenerate, finds duplicate files by content, keeps system folders and secrets out of reach, and can ask Claude what a folder is before you delete it."
    }
   },
   {
@@ -433,7 +434,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
    "name": "Is there a Windows version?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Not yet. It's planned, with the same approach: reading the disk as directly as the system allows. Follow the Windows issue on GitHub."
+    "text": "Yes, for Windows 10 and 11 on every PC: Intel and AMD (x64), ARM64 and 32-bit. One installer, no administrator rights needed, or one PowerShell line: irm https://vassilidev.github.io/evict/install.ps1 | iex. The same interface, the Recycle Bin, Explorer and built-in updates."
    }
   }
  ]
@@ -455,15 +456,15 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
 
 <main class="wrap">
   <div class="hero">
-    <p class="kicker">Free disk space analyzer for macOS and Linux</p>
+    <p class="kicker">Free disk space analyzer for macOS, Windows and Linux</p>
     <h1>The bouncer for your disk<span>.</span></h1>
-    <p class="lead">Evict reads your whole disk in seconds and shows where every gigabyte went: a map, a list, the duplicates, the caches you can drop. Then it helps you clean up, safely. Native on macOS and Linux.</p>
+    <p class="lead">Evict reads your whole disk in seconds and shows where every gigabyte went: a map, a list, the duplicates, the caches you can drop. Then it helps you clean up, safely. Native on macOS, Windows and Linux.</p>
     <div class="cta" data-cta></div>
     <ul class="trust">
       <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>Signed and notarized on macOS</li>
       <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Your files never leave your computer</li>
       <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg>Open source, MIT license</li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>macOS and Linux, Intel and ARM</li>
+      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>macOS, Windows and Linux, Intel and ARM</li>
     </ul>
 
     <div class="disk" aria-label="Example: a 494 GB disk split by kind of file">
@@ -510,10 +511,10 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
   <section class="chapter flip">
     <div class="text">
       <h2>Find anything in a keystroke.</h2>
-      <p class="sub"><kbd>⌘K</kbd> (<kbd>Ctrl K</kbd> on Linux) opens a search over the map. With nothing typed, it lists the largest files of the disk, so finding large files takes a second.</p>
+      <p class="sub"><kbd>⌘K</kbd> (<kbd>Ctrl K</kbd> on Windows and Linux) opens a search over the map. With nothing typed, it lists the largest files of the disk, so finding large files takes a second.</p>
       <ul class="points">
         <li class="point"><i style="background:var(--purple)"></i><b>Every video, every disk image</b><p>Type <code>.mov .dmg</code>, or click one of the extensions that weigh the most.</p></li>
-        <li class="point"><i style="background:var(--blue)"></i><b>Preview before you decide</b><p><kbd>Space</kbd> previews photos, videos, PDFs and documents (Quick Look on macOS, GNOME Sushi or the default app on Linux), and lists what's inside zip, rar or 7z archives.</p></li>
+        <li class="point"><i style="background:var(--blue)"></i><b>Preview before you decide</b><p><kbd>Space</kbd> previews photos, videos, PDFs and documents (Quick Look on macOS, QuickLook or the default app on Windows, GNOME Sushi or the default app on Linux), and lists what's inside zip, rar or 7z archives.</p></li>
         <li class="point"><i style="background:var(--green)"></i><b>Select as you go</b><p>The selection stays while you search and browse, with its total size always in view.</p></li>
       </ul>
     </div>
@@ -545,7 +546,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
       <li class="tile">
         <div class="mock" aria-hidden="true"><div class="chips2"><span class="chip on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3"/></svg>Trash · 8.4 GB</span><span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>Downloads · 23 GB</span></div><span class="mono-s">~/.Trash · ~/.local/share/Trash</span></div>
         <h3>The Trash, with its size</h3>
-        <p><code>~/.Trash</code> on macOS, your desktop's Trash on Linux. What you delete from Evict lands there, and Empty Trash frees it for good.</p>
+        <p><code>~/.Trash</code> on macOS, the Recycle Bin on Windows, your desktop's Trash on Linux. What you delete from Evict lands there, and emptying it from Evict frees the space for good.</p>
       </li>
       <li class="tile">
         <div class="mock" aria-hidden="true"><div class="ar"><div class="hd"><span>backup-2024.zip</span><span>3.1 GB</span></div><div style="--w:100%"><span>photos/</span><span>2.2 GB</span></div><div style="--w:30%"><span>videos/</span><span>640 MB</span></div><div style="--w:4%"><span>notes.pdf</span><span>12 MB</span></div></div></div>
@@ -555,12 +556,12 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
       <li class="tile">
         <div class="mock" aria-hidden="true"><div class="chips2"><span class="chip off">/System</span><span class="chip off">/usr</span><span class="chip off">/var</span></div><span class="chip" style="align-self:flex-start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 8.5 4 9.5 6a13 13 0 0 1-2.6 3.3M6.6 6.6C4.6 7.9 3.2 9.8 2.5 12c1 2 4.5 6 9.5 6 1.7 0 3.2-.4 4.5-1.1M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>3 hidden</span></div>
         <h3>System folders out of the way</h3>
-        <p>Hide <code>/System</code> on macOS, <code>/usr</code> and <code>/var</code> on Linux, or any folder, to give the rest of the map more room. Evict remembers it.</p>
+        <p>Hide <code>/System</code> on macOS, <code>C:\Windows</code> on Windows, <code>/usr</code> and <code>/var</code> on Linux, or any folder, to give the rest of the map more room. Evict remembers it.</p>
       </li>
       <li class="tile">
         <div class="mock" aria-hidden="true"><span class="vers">1.10 <i>→</i> 1.11</span><span class="upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>Update to 1.11</span></div>
         <h3>Updates built in</h3>
-        <p>macOS installs signed updates in one click. Linux tells you when a new version is out, and the same install command updates it.</p>
+        <p>macOS and Windows install updates in one click, checked before they run. Linux tells you when a new version is out, and the same install command updates it.</p>
       </li>
       <li class="tile">
         <div class="mock mini-term" aria-hidden="true"><div class="dots"><i></i><i></i><i></i></div><span><b>$</b> ./evict ~/Projects</span><span class="ok">→ report opened in your browser</span></div>
@@ -594,10 +595,11 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
     </div>
     <ul class="how">
       <li style="--c:var(--red)"><b>getattrlistbulk on macOS</b>: name, type and size of hundreds of files in a single system call, with no <code>stat()</code> per file.</li>
+      <li style="--c:var(--blue)"><b>NtQueryDirectoryFile on Windows</b>: names, attributes and sizes on disk of a whole folder in 128 KB batches, each folder opened relative to its parent.</li>
       <li style="--c:var(--red)"><b>getdents64 on Linux</b>: folders read in 128 KB batches, their type known without any <code>stat()</code>, a single <code>fstatat()</code> per file.</li>
       <li style="--c:var(--orange)"><b>openat relative to the parent</b>: no full path is ever resolved, so threads don't fight in the kernel.</li>
       <li style="--c:var(--purple)"><b>A stack per thread</b>: each thread walks its own branch and only shares work when another one is idle.</li>
-      <li style="--c:var(--blue)"><b>Nothing counted twice</b>: hard links count once, firmlinks on macOS and bind mounts on Linux are read once.</li>
+      <li style="--c:var(--blue)"><b>Nothing counted twice</b>: hard links count once (on NTFS too), firmlinks on macOS and bind mounts on Linux are read once, junctions on Windows aren't followed.</li>
       <li style="--c:var(--green)"><b>Real disks only</b>: external drives and network shares are skipped, and on Linux /proc, /sys and snap images too.</li>
     </ul>
   </div>
@@ -606,7 +608,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
 <main class="wrap">
   <section id="install">
     <h2>Install in seconds.</h2>
-    <p class="sub">A Mac with macOS 13 or later, or a 64-bit Linux desktop. Free, no account.</p>
+    <p class="sub">A Mac with macOS 11 or later, a PC with Windows 10 or 11, or a 64-bit Linux desktop. Free, no account.</p>
     <div class="install">
       <div class="card dl">
         <h3>macOS</h3>
@@ -618,6 +620,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
           <li><span><b>The scan starts on its own</b> and takes about twenty seconds.</span></li>
         </ol>
       </div>
+      <div class="terms">
       <div class="term">
         <div class="term-bar"><i></i><i></i><i></i><span>Linux</span><button class="copy" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Copy</span></button></div>
 <pre class="sh" id="sh"><span class="c"># Ubuntu, Debian, Mint, Fedora, openSUSE, Arch, Manjaro…</span>
@@ -627,8 +630,17 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
 <span class="c"># Then open Evict from your app menu.</span>
 <span class="c"># Run the same line again to update.</span></pre>
       </div>
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i><span>Windows PowerShell</span><button class="copy" type="button" data-copy="irm https://vassilidev.github.io/evict/install.ps1 | iex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Copy</span></button></div>
+<pre class="sh"><span class="c"># Windows 10 and 11: x64, ARM64 and 32-bit PCs</span>
+<span class="c"># Installs Evict for your account, no admin rights</span>
+<span class="p">PS&gt; </span><span class="k">irm</span> <span class="u">https://vassilidev.github.io/evict/install.ps1</span> <span class="o">|</span> <span class="k">iex</span>
+
+<span class="c"># Or download Evict-Setup.exe and open it.</span></pre>
+      </div>
+      </div>
     </div>
-    <p class="more">.deb, .rpm and Arch packages, x86_64 and ARM64 builds, checksums and source builds: <a href="download.html">download Evict for macOS and Linux</a>.</p>
+    <p class="more">The Windows installer, .deb, .rpm and Arch packages, x86_64 and ARM64 builds, checksums and source builds: <a href="download.html">download Evict for macOS, Windows and Linux</a>.</p>
   </section>
 
   <section id="faq" class="faq">
@@ -637,26 +649,26 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
       <p>Something else? <a href="https://github.com/vassilidev/evict/issues">Open an issue</a> on GitHub.</p>
     </div>
     <div class="faq-list">
-      <details><summary>Can Evict delete something by mistake?</summary><p>Evict never deletes on its own. Everything goes through a confirmation that lists what will go, with the Trash as the default. The disk root, your home folder, system folders, ~/Library on macOS, ~/.config on Linux, keychains, keyrings and folders like ~/.ssh can't be deleted at all, and Evict warns you about the .env files and keys inside a folder before it goes.</p></details>
+      <details><summary>Can Evict delete something by mistake?</summary><p>Evict never deletes on its own. Everything goes through a confirmation that lists what will go, with the Trash as the default. The disk root, your home folder, system folders, ~/Library on macOS, AppData on Windows, ~/.config on Linux, keychains, keyrings, Windows credentials and folders like ~/.ssh can't be deleted at all, and Evict warns you about the .env files and keys inside a folder before it goes.</p></details>
       <details><summary>Does Evict send my files anywhere?</summary><p>No. The scan runs on your computer and stays there. Evict only contacts GitHub to check for updates. If you use Ask Claude or Quick wins, the prompt holds names and sizes from the scan, never the content of a file, and it goes through your own Claude Code.</p></details>
-      <details><summary>How can it be that fast?</summary><p>It asks the system for the names and sizes of hundreds of files at a time instead of one by one (getattrlistbulk on macOS, getdents64 on Linux), never builds a full path, and runs eight threads that each walk their own part of the disk. The speed section above has the details.</p></details>
+      <details><summary>How can it be that fast?</summary><p>It asks the system for the names and sizes of hundreds of files at a time instead of one by one (getattrlistbulk on macOS, NtQueryDirectoryFile on Windows, getdents64 on Linux), never builds a full path, and runs eight threads that each walk their own part of the disk. The speed section above has the details.</p></details>
       <details><summary>Will the scan slow my computer down?</summary><p>For a few seconds, Evict reads file names and sizes, never their content. On macOS it doesn't download iCloud files that are only in the cloud, and nothing runs in the background once the map is on screen.</p></details>
       <details><summary>Why does it ask for Full Disk Access on macOS?</summary><p>Without it, macOS hides part of the disk (Mail, Messages, other apps' data) and interrupts the scan with a permission prompt for each protected folder. With it, Evict sees everything in one go. You can still scan without it.</p></details>
-      <details><summary>What does "Rescan as Administrator" do on Linux?</summary><p>A normal user can't read everything: Docker images in /var/lib/docker, system logs, other users' homes. That space shows up as "not visible to the scan". Rescan as Administrator asks for your password through the system's polkit prompt and reads it all. Deleting items owned by root also asks for it.</p></details>
-      <details><summary>Which Linux distributions are supported?</summary><p>Any 64-bit desktop (x86_64 or ARM64) with glibc 2.34 or later and WebKitGTK 4.1. Evict is installed, started and uninstalled on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10 on every change. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported. The install script picks the right package for your distribution.</p></details>
+      <details><summary>What does "Rescan as Administrator" do?</summary><p>A normal user can't read everything: Docker images in /var/lib/docker, system logs, other users' homes, restore points on Windows. That space shows up as "not visible to the scan". Rescan as Administrator asks for your password (polkit on Linux, UAC on Windows) and reads it all. Deleting items owned by the system also asks for it.</p></details>
+      <details><summary>Which Linux distributions are supported?</summary><p>Any 64-bit desktop (x86_64 or ARM64) with glibc 2.31 or later and WebKitGTK 4.1 or 4.0. Evict is installed, started and uninstalled on Ubuntu 20.04, 22.04, 24.04 and 26.04, Debian 11, 12 and 13, Linux Mint 20, 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 9 and 10 on every change. musl distributions like Alpine aren't supported. The install script picks the right package for your distribution.</p></details>
       <details><summary>What does "Regenerable" mean?</summary><p>Caches, build outputs and dependencies: node_modules, DerivedData, .venv, Caches and the like. Apps and tools recreate them when they need them, so deleting them frees space without losing your work. The next build or launch may just take a little longer.</p></details>
       <details><summary>Do I need Claude to use Evict?</summary><p>No. Everything works without it. Ask Claude and Quick wins use Claude Code if it's installed on your computer; otherwise Evict copies a ready-made prompt you can paste into any AI chat.</p></details>
       <details><summary>Why is the total different from what my system shows?</summary><p>Evict counts the real space each file takes. Copies that share their space with the original (APFS clones on macOS, reflinks and snapshots on Btrfs or ZFS) are counted at full size, so the total can be a little higher. APFS snapshots can't be seen by any app and show up as invisible space.</p></details>
-      <details><summary>Can it scan an external drive?</summary><p>The app scans your startup disk; on Linux that means every internal disk, so a separate /home partition counts. From the terminal, <code>./evict /Volumes/YourDrive</code> on macOS or <code>./evict /media/you/YourDrive</code> on Linux scans another one and opens the report in your browser.</p></details>
-      <details><summary>How does Evict compare to DaisyDisk, WinDirStat or Baobab?</summary><p>They all show where your disk space went, and Evict belongs to the same family as DaisyDisk, GrandPerspective, WinDirStat, QDirStat and GNOME's Disk Usage Analyzer (Baobab). Evict is free and open source, runs natively on macOS and Linux with the same interface, and draws a treemap like WinDirStat and QDirStat. It also groups dependency folders like node_modules into one block, marks caches you can regenerate, finds duplicate files by content, keeps system folders and secrets out of reach, and can ask Claude what a folder is before you delete it.</p></details>
+      <details><summary>Can it scan an external drive?</summary><p>The app scans your startup disk; on Linux that means every internal disk, so a separate /home partition counts, and on Windows every internal drive (C:, D:…). From the terminal, <code>./evict /Volumes/YourDrive</code> on macOS or <code>./evict /media/you/YourDrive</code> on Linux scans another one and opens the report in your browser.</p></details>
+      <details><summary>How does Evict compare to DaisyDisk, WinDirStat or Baobab?</summary><p>They all show where your disk space went, and Evict belongs to the same family as DaisyDisk, GrandPerspective, WinDirStat, QDirStat and GNOME's Disk Usage Analyzer (Baobab). Evict is free and open source, runs natively on macOS, Windows and Linux with the same interface, and draws a treemap like WinDirStat and QDirStat. It also groups dependency folders like node_modules into one block, marks caches you can regenerate, finds duplicate files by content, keeps system folders and secrets out of reach, and can ask Claude what a folder is before you delete it.</p></details>
       <details><summary>Is it really free?</summary><p>Yes. Evict is open source under the MIT license, with no account, no subscription and no telemetry.</p></details>
-      <details><summary>Is there a Windows version?</summary><p>Not yet. It's planned, with the same approach: reading the disk as directly as the system allows. Follow <a href="https://github.com/vassilidev/evict/issues/2">the Windows issue</a> on GitHub.</p></details>
+      <details><summary>Is there a Windows version?</summary><p>Yes, for Windows 10 and 11 on every PC: Intel and AMD (x64), ARM64 and 32-bit. One <a href="download.html#windows">installer</a>, no administrator rights needed, or one PowerShell line: <code>irm https://vassilidev.github.io/evict/install.ps1 | iex</code>. The same interface, the Recycle Bin, Explorer and built-in updates.</p></details>
     </div>
   </section>
 
   <div class="final">
     <h2>Get your space back.</h2>
-    <p>Seconds to see everything, a few clicks to clean it up. On macOS and Linux.</p>
+    <p>Seconds to see everything, a few clicks to clean it up. On macOS, Windows and Linux.</p>
     <div class="cta" data-cta style="justify-content:center"></div>
   </div>
 </main>
@@ -666,12 +678,12 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
     <div class="foot">
       <div class="foot-about">
         <a class="brand" href="#"><svg class="mark" viewBox="0 0 20 20" aria-hidden="true"><rect width="11" height="20" rx="2.5" fill="#e0473d"/><rect x="12" width="8" height="12" rx="2.5" fill="#e0921f"/><rect x="12" y="13" width="8" height="7" rx="2.5" fill="#3d7fe6"/></svg><span class="word">Evict<span>.</span></span></a>
-        <p>The bouncer for your disk. Free and open source, for macOS and Linux machines that are running out of space.</p>
+        <p>The bouncer for your disk. Free and open source, for macOS, Windows and Linux machines that are running out of space.</p>
         <a class="pill soft" href="download.html">Download Evict<i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></i></a>
       </div>
       <div><h2>Product</h2><ul><li><a href="#see">Features</a></li><li><a href="#speed">Speed</a></li><li><a href="download.html">Download</a></li><li><a href="#faq">FAQ</a></li></ul></div>
       <div><h2>Project</h2><ul><li><a href="https://github.com/vassilidev/evict">Source code</a></li><li><a href="https://github.com/vassilidev/evict/releases">Releases</a></li><li><a href="https://github.com/vassilidev/evict/issues">Report an issue</a></li><li><a href="https://github.com/vassilidev/evict/blob/main/LICENSE">MIT license</a></li></ul></div>
-      <div><h2>Platforms</h2><ul><li><a href="download.html#macos">macOS</a></li><li><a href="download.html#linux">Linux</a></li><li><a href="https://github.com/vassilidev/evict/issues/2">Windows</a> <span>soon</span></li></ul></div>
+      <div><h2>Platforms</h2><ul><li><a href="download.html#macos">macOS</a></li><li><a href="download.html#windows">Windows</a></li><li><a href="download.html#linux">Linux</a></li></ul></div>
     </div>
     <p class="giant" aria-hidden="true">Evict<span>.</span></p>
     <div class="foot-bottom"><span>© 2026 vassilidev</span><span>Made for full disks, by <a href="https://github.com/vassilidev">vassilidev</a></span></div>
@@ -681,6 +693,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
 <script>
 const REPO = 'https://github.com/vassilidev/evict';
 const DMG = REPO + '/releases/latest/download/Evict.dmg';
+const RELEASES = 'https://api.github.com/repos/vassilidev/evict/releases?per_page=10';
 const INSTALL = 'curl -fsSL https://vassilidev.github.io/evict/install.sh | sh';
 const ARROW = '<i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg></i>';
 const COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
@@ -696,12 +709,16 @@ const others = '<a class="alt" href="download.html">Other platforms and files</a
 const cta = {
   mac: `<a class="pill big" href="${DMG}">Download for macOS${ARROW}</a>${others}`,
   linux: `<div class="cmd"><code>${INSTALL}</code><button class="copy" type="button" data-copy="${INSTALL}" aria-label="Copy the install command">${COPY}<span>Copy</span></button></div>${others}`,
-  windows: `<a class="pill big soft" href="${REPO}/issues/2">Coming to Windows${ARROW}</a>
-    <span class="meta">Evict runs on macOS and Linux today. <a href="download.html">See every platform</a>.</span>`,
-  mobile: `<a class="pill big" href="download.html">Get Evict for macOS or Linux${ARROW}</a>`,
+  windows: `<a class="pill big" href="download.html#windows" data-setup>Download for Windows${ARROW}</a>${others}`,
+  mobile: `<a class="pill big" href="download.html">Get Evict for macOS, Windows or Linux${ARROW}</a>`,
 }[os];
 for (const box of document.querySelectorAll('[data-cta]')) box.innerHTML = cta;
 for (const box of document.querySelectorAll('[data-cta-small]')) box.innerHTML = `<a class="pill" href="${DMG}">Download Evict.dmg${ARROW}</a>`;
+// The Windows installer of the newest release that has it (a release carries it before its DMG is notarized)
+if (os === 'windows') fetch(RELEASES).then(r => r.ok ? r.json() : Promise.reject()).then(releases => {
+  const setup = releases.flatMap(r => r.draft || r.prerelease ? [] : r.assets || []).find(a => a.name === 'Evict-Setup.exe');
+  if (setup) for (const a of document.querySelectorAll('[data-setup]')) a.href = setup.browser_download_url;
+}).catch(() => {});
 
 // The hero screenshot starts tilted back and straightens as the page scrolls; the nav tightens
 const nav = document.getElementById('nav'), shot = document.getElementById('hero-shot');

@@ -33,6 +33,7 @@ jobs:
           for bin in Evict evict-scan; do
             lipo -archs ".build/Evict.app/Contents/MacOS/$bin" | grep -q 'x86_64 arm64'
           done
+          test -f .build/Evict.app/Contents/Frameworks/libswift_Concurrency.dylib  # Swift concurrency for macOS 11
           codesign --verify --deep --strict .build/Evict.app
           page=.build/Evict.app/Contents/Resources/index.html
           grep -q 'window.DATA = null; /\* __DATA__ \*/' "$page"

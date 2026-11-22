@@ -15,4 +15,10 @@ got=$(printf '%s' "$json" | sed -E 's/.*"tree":\["[^"]*",([0-9]+).*/\1/')
 want=$(( $(du -sk "$t/f" | cut -f1) * 1024 ))
 printf '%s' "$json" | grep -qE '\["(big|hardlink)",' || { echo "FAIL: big file missing"; exit 1; }
 [ "$got" = "$want" ] || { echo "FAIL: scan=$got du=$want"; exit 1; }
+# System folders: the first scan walks them and fills the cache, the second one reads it; same total both times
+mkdir -p "$t/Library/Caches"
+tot() { "$t/scan" --home "$t" /usr 2>/dev/null | sed -E 's/.*"tree":\["[^"]*",([0-9]+).*/\1/'; }
+walked=$(tot)
+cached=$(tot)
+[ "$walked" = "$cached" ] || { echo "FAIL: /usr walked=$walked cached=$cached"; exit 1; }
 echo "OK ($got bytes, same as du)"

@@ -15,11 +15,11 @@ homepage: https://vassilidev.github.io/evict/
 license: MIT
 overrides:
   deb:
-    depends: [libwebkit2gtk-4.1-0, curl]
+    depends: ["libwebkit2gtk-4.1-0 | libwebkit2gtk-4.0-37", curl]
     recommends: [libarchive-tools]
   rpm:
-    # by soname, so Fedora (webkit2gtk4.1) and openSUSE (libwebkit2gtk-4_1-0) both resolve it
-    depends: ["libwebkit2gtk-4.1.so.0()(64bit)", curl]
+    # by soname, so Fedora (webkit2gtk4.1), openSUSE (libwebkit2gtk-4_1-0) and RHEL 9 (webkit2gtk3, 4.0) all resolve it
+    depends: ["(libwebkit2gtk-4.1.so.0()(64bit) or libwebkit2gtk-4.0.so.37()(64bit))", curl]
     recommends: [bsdtar]
   archlinux:
     depends: [webkit2gtk-4.1, curl]
@@ -43,3 +43,6 @@ contents:
     dst: /usr/share/icons/hicolor/512x512/apps/com.vassilidev.evict.png
   - src: linux/com.vassilidev.evict.policy
     dst: /usr/share/polkit-1/actions/com.vassilidev.evict.policy
+
+scripts:
+  postremove: linux/postremove.sh  # the system folder sizes kept by a scan as administrator

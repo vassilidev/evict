@@ -9,6 +9,7 @@
 // - openat(parent_fd, name), NtCreateFile relative to the parent on Windows: no full path lookup, so threads
 //   don't fight over the same top-level vnodes in the kernel.
 // - each thread walks depth-first on its own stack and only hands work out when a thread is idle.
+// - sealed system folders are walked once: their totals are kept until the system is updated.
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -29,7 +30,11 @@
 typedef HANDLE fd_t;
 #define BAD_FD(fd) ((fd) == NULL)
 #define close_fd CloseHandle
+#define path_cmp _stricmp
+#define path_ncmp _strnicmp
 #else
+#define path_cmp strcmp
+#define path_ncmp strncmp
 #include <sys/resource.h>
 #include <sys/statvfs.h>
 typedef int fd_t;
@@ -38,6 +43,8 @@ typedef int fd_t;
 #ifdef __APPLE__
 #include <sys/attr.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <sys/vnode.h>
 #define OS "mac"
 #else
@@ -57,9 +64,12 @@ typedef struct Node {
     char *name;
     char *path;  // only set on ancestors of skipped mount points
     uint64_t size, small;
-    struct Node **kids;
+    union {
+        struct Node **kids;
+        struct Frozen *ice;  // a sealed folder being walked has no kids
+    };
     uint32_t nkids, cap, nsmall;
-    uint8_t dir, err;
+    uint8_t dir, err, frozen;
 } Node;
 
 // An open directory kept alive until all its subdirectories have been opened from it
@@ -167,6 +177,100 @@ static void add_skip(const char *path) {
 }
 #endif
 
+// Sealed system folders only change when the system is updated: each one is walked once, shown as one block, and
+// its total is reused from the cache file until the key (the system's version) changes.
+// sealed: "/dir" is that folder, "/dir/" is every folder directly inside. lives: folders that do change; neither
+// they nor any folder above them are ever taken from the cache.
+// Hard links: the cached folders count theirs among themselves, and the file keeps their ids, so a link to the same
+// file elsewhere on the disk (most of System32 is linked from WinSxS) isn't counted again.
+typedef struct Frozen {
+    char *path;
+    uint64_t size, *keys, owed;  // owed: links the rest of this scan counted first, part of the folder's total
+    uint32_t count, nkeys, capkeys;
+    struct Node *node;
+} Frozen;
+static char *sealed[8], **lives, cache_key[128], cache_file[4200];
+static int nsealed, nlives, nfrozen, nfresh;
+static Frozen *frozen, **fresh;  // read from the file, walked by this scan
+static pthread_mutex_t ilock = PTHREAD_MUTEX_INITIALIZER;
+
+static void add_live(const char *path) {
+    lives = xrealloc(lives, (nlives + 1) * sizeof *lives);
+    lives[nlives++] = strdup(path);
+}
+
+static int is_sealed(const char *path) {
+    for (int i = 0; i < nsealed; i++) {
+        size_t l = strlen(sealed[i]);
+        if (sealed[i][l - 1] == '/' ? !path_ncmp(sealed[i], path, l) && !strchr(path + l, '/') : !path_cmp(sealed[i], path))
+            return 1;
+    }
+    return 0;
+}
+
+static Frozen *find_frozen(const char *path) {
+    for (int i = 0; i < nfrozen; i++)
+        if (!path_cmp(frozen[i].path, path)) return &frozen[i];
+    return NULL;
+}
+
+static void add_key(Frozen *z, uint64_t key) {
+    if (z->nkeys == z->capkeys) {
+        z->capkeys = z->capkeys ? z->capkeys * 2 : 16;
+        z->keys = xrealloc(z->keys, z->capkeys * sizeof *z->keys);
+    }
+    z->keys[z->nkeys++] = key;
+}
+
+// The file: the key on the first line, then for each folder a "size count path" line and its "+link id" lines
+static void load_cache(void) {
+    FILE *f = cache_key[0] ? fopen(cache_file, "r") : NULL;
+    char line[4400];
+    size_t kl = strlen(cache_key), rl = strlen(root);
+    if (!f) return;
+    if (fgets(line, sizeof line, f) && !strncmp(line, cache_key, kl) && line[kl] == '\n')
+        while (fgets(line, sizeof line, f)) {
+            unsigned long long size;
+            unsigned count;
+            int at = 0;
+            size_t l = strlen(line);
+            if (!l || line[l - 1] != '\n') continue;
+            line[l - 1] = 0;
+            if (line[0] == '+') {
+                if (nfrozen) add_key(&frozen[nfrozen - 1], strtoull(line + 1, NULL, 16));
+            } else if (sscanf(line, "%llu %u %n", &size, &count, &at) >= 2 && line[at] == '/') {
+                frozen = xrealloc(frozen, (nfrozen + 1) * sizeof *frozen);
+                frozen[nfrozen++] = (Frozen){.path = strdup(line + at), .size = size, .count = count};
+            }
+        }
+    fclose(f);
+    // The folders this scan will take from the file have already counted these links
+    for (int i = 0; i < nfrozen; i++)
+        if (rl == 1 || (!path_ncmp(frozen[i].path, root, rl) && frozen[i].path[rl] == '/'))
+            for (uint32_t k = 0; k < frozen[i].nkeys; k++) link_seen(frozen[i].keys[k]), link_seen(~frozen[i].keys[k]);
+}
+
+static void save_one(FILE *f, const Frozen *z, uint64_t size, uint32_t count) {
+    fprintf(f, "%llu %u %s\n", (unsigned long long)size, count, z->path);
+    for (uint32_t k = 0; k < z->nkeys; k++) fprintf(f, "+%llx\n", (unsigned long long)z->keys[k]);
+}
+
+static void save_cache(void) {
+    char tmp[4300];
+    snprintf(tmp, sizeof tmp, "%s.tmp", cache_file);
+    FILE *f = fopen(tmp, "w");
+    if (!f) return;
+    fprintf(f, "%s\n", cache_key);
+    for (int i = 0; i < nfrozen; i++) save_one(f, &frozen[i], frozen[i].size, frozen[i].count);
+    for (int i = 0; i < nfresh; i++) {
+        Node *n = fresh[i]->node;
+        if (!n->err && !strchr(fresh[i]->path, '\n')) save_one(f, fresh[i], n->small + fresh[i]->owed, n->nsmall);
+    }
+    if (fclose(f)) return;
+    remove(cache_file);  // Windows doesn't rename over a file
+    rename(tmp, cache_file);
+}
+
 #ifdef __APPLE__
 // Skip every mount point outside the boot APFS container, plus the firmlinked Data volume
 // (already reached through /Users, /Applications...) and the sealed system snapshot copy.
@@ -188,8 +292,25 @@ static void init_skips(void) {
         int same = cl > 9 && !strncmp(from, container, cl) && from[cl] == 's';
         if (!same || !strcmp(on, "/System/Volumes/Data") || !strcmp(on, "/System/Volumes/Update/mnt1"))
             add_skip(on);
+        else add_live(on);
     }
     add_skip("/Volumes");
+
+    // The sealed system volume changes with the build only. Firmlinks are the folders that look like part of it
+    // but live on the Data volume: without their list, nothing is cached.
+    FILE *f = fopen("/usr/share/firmlinks", "r");
+    char line[2048];
+    size_t kl = sizeof cache_key - 2;
+    if (!f) return;
+    while (fgets(line, sizeof line, f)) {
+        line[strcspn(line, "\t\n")] = 0;
+        if (line[0] == '/') add_live(line);
+    }
+    fclose(f);
+    memcpy(cache_key, "1 ", 2);
+    if (sysctlbyname("kern.osversion", cache_key + 2, &kl, NULL, 0)) cache_key[0] = 0;
+    static char *dirs[] = {"/System/", "/System/Library/", "/usr/", "/bin", "/sbin"};
+    for (size_t i = 0; i < sizeof dirs / sizeof *dirs; i++) sealed[nsealed++] = dirs[i];
 }
 #elif defined(_WIN32)
 // Paths in the report look like POSIX ones, so the page works unchanged: C:\Users\me is /C:/Users/me, and "/" is
@@ -230,6 +351,41 @@ static void init_skips(void) {
         if (LookupPrivilegeValueW(NULL, L"SeBackupPrivilege", &tp.Privileges[0].Luid))
             AdjustTokenPrivileges(token, FALSE, &tp, 0, NULL, NULL);
         CloseHandle(token);
+    }
+}
+
+static char *to_report(const char *native);
+
+// Windows and System32 change with updates and with components added or removed (the WinSxS folder's date then
+// moves), except the folders listed here, which programs, drivers and the system itself keep writing to.
+static void init_sealed(void) {
+    static const char *live[] = {"WinSxS", "servicing", "Temp", "Logs", "Prefetch", "SoftwareDistribution", "Installer",
+        "Minidump", "LiveKernelReports", "ServiceProfiles", "Panther", "INF", "Fonts", "assembly", "Microsoft.NET",
+        "appcompat", "CSC", "debug", "Downloaded Program Files", "System32/config", "System32/winevt",
+        "System32/LogFiles", "System32/DriverStore", "System32/drivers", "System32/spool", "System32/Tasks",
+        "System32/sru", "System32/wbem", "System32/catroot", "System32/catroot2", "System32/WDI",
+        "System32/Microsoft", "System32/CodeIntegrity", "System32/SleepStudy", "System32/GroupPolicy"};
+    char native[MAX_PATH], build[32] = "", buf[MAX_PATH + 64];
+    DWORD ubr = 0, n = sizeof build, un = sizeof ubr;
+    WIN32_FILE_ATTRIBUTE_DATA sxs;
+    const char *key = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+    UINT l = GetWindowsDirectoryA(native, MAX_PATH);
+    if (!l || l >= MAX_PATH) return;
+    snprintf(buf, sizeof buf, "%s\\WinSxS", native);
+    if (RegGetValueA(HKEY_LOCAL_MACHINE, key, "CurrentBuildNumber", RRF_RT_REG_SZ, NULL, build, &n) ||
+        RegGetValueA(HKEY_LOCAL_MACHINE, key, "UBR", RRF_RT_REG_DWORD, NULL, &ubr, &un) ||
+        !GetFileAttributesExA(buf, GetFileExInfoStandard, &sxs))
+        return;
+    snprintf(cache_key, sizeof cache_key, "1 %s.%lu %lx%08lx", build, (unsigned long)ubr,
+             (unsigned long)sxs.ftLastWriteTime.dwHighDateTime, (unsigned long)sxs.ftLastWriteTime.dwLowDateTime);
+    char *win = to_report(native);
+    snprintf(buf, sizeof buf, "%s/", win);
+    sealed[nsealed++] = strdup(buf);
+    snprintf(buf, sizeof buf, "%s/System32/", win);
+    sealed[nsealed++] = strdup(buf);
+    for (size_t i = 0; i < sizeof live / sizeof *live; i++) {
+        snprintf(buf, sizeof buf, "%s/%s", win, live[i]);
+        add_live(buf);
     }
 }
 
@@ -377,16 +533,38 @@ static void init_skips(void) {
                 disk_total += (uint64_t)(v.f_blocks - v.f_bfree + v.f_bavail) * v.f_frsize;
                 disk_free += (uint64_t)v.f_bavail * v.f_frsize;
             }
+            if (strcmp(on, "/")) add_live(on);
         } else if (strcmp(on, "/") && strcmp(on, root)) {
             add_skip(on);
         }
     }
     fclose(f);
+
+    // /usr belongs to the package manager: the key is the state of its database, and without a known one nothing
+    // is cached. On a merged /usr, /bin and /lib are links and never match.
+    // shortcut: files put in /usr by hand (sudo pip, make install outside /usr/local) are seen at the next package
+    // change; add a date check of the folders if that matters
+    static const char *dbs[] = {"/var/lib/dpkg/status", "/var/lib/rpm/rpmdb.sqlite", "/var/lib/rpm/rpmdb.sqlite-wal",
+                                "/var/lib/rpm/Packages", "/usr/lib/sysimage/rpm/rpmdb.sqlite",
+                                "/usr/lib/sysimage/rpm/rpmdb.sqlite-wal", "/usr/lib/sysimage/rpm/Packages.db",
+                                "/var/lib/pacman/local", "/lib/apk/db/installed"};
+    uint64_t h = 0;
+    struct stat st;
+    for (size_t i = 0; i < sizeof dbs / sizeof *dbs; i++)
+        if (!stat(dbs[i], &st))
+            h = (h ^ (uint64_t)st.st_mtim.tv_sec ^ (uint64_t)st.st_mtim.tv_nsec << 32 ^ (uint64_t)st.st_size ^ (i + 1)) *
+                0x9E3779B97F4A7C15ULL;
+    if (!h) return;
+    snprintf(cache_key, sizeof cache_key, "1 %llx", (unsigned long long)h);
+    static char *dirs[] = {"/usr/", "/bin", "/sbin", "/lib", "/lib32", "/lib64", "/libx32"};
+    for (size_t i = 0; i < sizeof dirs / sizeof *dirs; i++) sealed[nsealed++] = dirs[i];
+    add_live("/usr/local");
 }
 #endif
 
 
-// 0 = nothing to do, 1 = skip this path, 2 = keep its path (a skipped mount point lies below)
+// 0 = nothing to do, 1 = skip this path, 2 = keep its path (a skipped mount point or a live folder lies below,
+// or it is a live folder)
 static int skip_state(const char *path) {
     size_t l = strlen(path);
     int below = 0;
@@ -394,6 +572,8 @@ static int skip_state(const char *path) {
         if (!strcmp(path, skips[i])) return 1;
         if (!strncmp(skips[i], path, l) && (skips[i][l] == '/' || l == 1)) below = 1;
     }
+    for (int i = 0; i < nlives && !below; i++)
+        below = !path_ncmp(lives[i], path, l) && (!lives[i][l] || lives[i][l] == '/' || l == 1);
     return below ? 2 : 0;
 }
 
@@ -411,7 +591,7 @@ typedef struct {
     Node *dir, *sum;
     Dir *me;
     Stack *local;
-    uint64_t count, bytes, deep, ndeep;
+    uint64_t count, bytes, deep, ndeep, owed;
 } Scan;
 
 static void add_dir(Scan *s, const char *name, size_t nlen) {
@@ -432,6 +612,29 @@ static void add_dir(Scan *s, const char *name, size_t nlen) {
         memcpy(path + pl + 1, name, nlen + 1);
         int st = skip_state(path);
         if (st == 1) { free(path); return; }
+        if (st == 0 && cache_key[0] && is_sealed(path)) {
+            Node *k = new_node(name, nlen, 1);
+            k->path = path;
+            k->frozen = 1;
+            add_kid(s->dir, k);
+            Frozen *f = find_frozen(path);
+            if (f) {
+                k->small = f->size;
+                k->nsmall = f->count;
+                s->bytes += f->size;
+                s->count += f->count;
+                return;
+            }
+            if (!(k->ice = calloc(1, sizeof *k->ice))) { perror("calloc"); exit(1); }
+            k->ice->path = path;
+            k->ice->node = k;
+            pthread_mutex_lock(&ilock);
+            fresh = xrealloc(fresh, (nfresh + 1) * sizeof *fresh);
+            fresh[nfresh++] = k->ice;
+            pthread_mutex_unlock(&ilock);
+            push(s->local, (Job){k, s->me, NULL, NULL});
+            return;
+        }
         if (st == 0) { free(path); path = NULL; }
     }
     Node *k = new_node(name, nlen, 1);
@@ -441,7 +644,13 @@ static void add_dir(Scan *s, const char *name, size_t nlen) {
 }
 
 static void add_file(Scan *s, const char *name, size_t nlen, uint64_t alloc, uint32_t nlink, uint64_t key) {
-    if (nlink > 1 && link_seen(key)) return;
+    if (nlink > 1 && s->sum && s->sum->frozen) {
+        if (link_seen(~key)) return;
+        pthread_mutex_lock(&ilock);
+        add_key(s->sum->ice, key);
+        pthread_mutex_unlock(&ilock);
+        if (link_seen(key)) { s->owed += alloc; return; }
+    } else if (nlink > 1 && link_seen(key)) return;
     s->bytes += alloc;
     if (s->sum) {
         s->deep += alloc;
@@ -457,7 +666,7 @@ static void add_file(Scan *s, const char *name, size_t nlen, uint64_t alloc, uin
 }
 
 static void scan_dir(Job j, char *buf, Stack *local) {
-    Node *dir = j.node, *sum = j.sum ? j.sum : dir && !dir->path && is_deps(dir->name) ? dir : NULL;
+    Node *dir = j.node, *sum = j.sum ? j.sum : dir && (dir->frozen || (!dir->path && is_deps(dir->name))) ? dir : NULL;
     const char *dname = dir ? dir->name : j.name;
 #ifdef _WIN32
     // Without a parent: the scan root, or one of the drives under "/"
@@ -492,7 +701,7 @@ static void scan_dir(Job j, char *buf, Stack *local) {
     me->vol = vol;
     me->ntfs = ntfs;
 #endif
-    Scan s = {dir, sum, me, local, 0, 0, 0, 0};
+    Scan s = {dir, sum, me, local, 0, 0, 0, 0, 0};
     size_t first = local->n;
 
 #ifdef _WIN32
@@ -615,6 +824,7 @@ static void scan_dir(Job j, char *buf, Stack *local) {
     if (sum) {
         __atomic_fetch_add(&sum->small, s.deep, __ATOMIC_RELAXED);
         __atomic_fetch_add(&sum->nsmall, (uint32_t)s.ndeep, __ATOMIC_RELAXED);
+        if (s.owed) __atomic_fetch_add(&sum->ice->owed, s.owed, __ATOMIC_RELAXED);
     }
     size_t added = local->n - first;
     atomic_fetch_add_explicit(&me->refs, (int)added, memory_order_relaxed);
@@ -779,6 +989,32 @@ int main(int argc, char **argv) {
     }
 #endif
     init_skips();
+#ifdef _WIN32
+    init_sealed();
+#endif
+    // In a folder the uninstaller already removes. A scan as root (pkexec on Linux) keeps its own file: it reads
+    // more folders, and root must not write in a folder the user controls.
+#ifdef _WIN32
+    const char *base = getenv("LOCALAPPDATA"), *dir = "\\Evict", *name = "\\system.cache";
+#elif defined(__APPLE__)
+    const char *base = geteuid() ? home : "", *dir = "/Library/Caches/com.vassilidev.evict", *name = "/system.cache";
+#else
+    const char *base = geteuid() ? home : "", *dir = geteuid() ? "/.cache/evict" : "/var/cache", *name = geteuid() ? "/system.cache" : "/evict-system.cache";
+#endif
+    if (base) {
+#ifdef _WIN32
+        snprintf(cache_file, sizeof cache_file, "%s%s", base, dir);
+        CreateDirectoryA(cache_file, NULL);
+#else
+        snprintf(cache_file, sizeof cache_file, "%s/.cache", base);
+        if (geteuid() && strstr(dir, "/.cache")) mkdir(cache_file, 0700);  // a new Linux account has none yet
+        snprintf(cache_file, sizeof cache_file, "%s%s", base, dir);
+        mkdir(cache_file, 0700);
+#endif
+        snprintf(cache_file, sizeof cache_file, "%s%s%s", base, dir, name);
+    }
+    if (!cache_file[0]) cache_key[0] = 0;
+    load_cache();
     static char out[1 << 20];
     setvbuf(stdout, out, _IOFBF, sizeof out);
 
@@ -790,6 +1026,9 @@ int main(int argc, char **argv) {
     if (!strcmp(root, "/")) {
         for (int i = 0; i < ndrives; i++) {
             Node *d = new_node(drives[i], 2, 1);
+            char dpath[8];
+            snprintf(dpath, sizeof dpath, "/%s", drives[i]);
+            if (skip_state(dpath) == 2) d->path = strdup(dpath);
             add_kid(top, d);
             push(&shared, (Job){d, NULL, NULL, NULL});
             add_space(drives[i][0]);
@@ -800,9 +1039,9 @@ int main(int argc, char **argv) {
         atomic_store(&pending, 1);
         add_space(root[1]);
     }
-    SYSTEM_INFO si;
-    GetSystemInfo(&si);
-    long ncpu = (long)si.dwNumberOfProcessors;
+    // shortcut: 8 threads whatever the core count, since a cold scan waits on the disk and NVMe drives like many
+    // requests in flight; measure on real PCs (CI runners have throttled cloud disks) before tuning further
+    long ncpu = MAX_THREADS;
 #else
     push(&shared, (Job){top, NULL, NULL, NULL});
     atomic_store(&pending, 1);
@@ -836,6 +1075,7 @@ int main(int argc, char **argv) {
     if (!atomic_load(&stopping))
         for (int i = 0; i < nth; i++) pthread_join(th[i], NULL);
     if (live) progress_line();
+    if (nfresh && !atomic_load(&stopping)) save_cache();
     total(top);
     clock_gettime(CLOCK_MONOTONIC, &t1);
     double secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;

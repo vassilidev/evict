@@ -36,6 +36,7 @@ if [ "${1:-}" = --uninstall ]; then
   elif has pacman && pacman -Q evict > /dev/null 2>&1; then root pacman -R --noconfirm evict
   fi
   rm -rf "$lib" "$HOME/.local/bin/evict" "$apps/com.vassilidev.evict.desktop" "$icons/com.vassilidev.evict.png" "$HOME/.cache/evict"
+  [ "$(id -u)" -ne 0 ] || rm -f /var/cache/evict-system.cache
   say "✓ Evict removed"
   exit 0
 fi
@@ -92,7 +93,7 @@ case $kind in
   rpm)
     if has dnf; then
       if ! root dnf install -y "$file"; then
-        # Rocky, Alma, RHEL and CentOS Stream ship WebKitGTK 4.1 in EPEL
+        # Rocky, Alma, RHEL and CentOS Stream 10 ship WebKitGTK 4.1 in EPEL (9 has 4.0 in AppStream)
         grep -qi rhel /etc/os-release || die "dnf couldn't install Evict."
         say "→ Enabling EPEL for WebKitGTK"
         root dnf install -y epel-release || die "couldn't enable EPEL."
@@ -111,12 +112,14 @@ case $kind in
     sed "s|^Exec=evict$|Exec=$lib/evict|" "$lib/com.vassilidev.evict.desktop" > "$apps/com.vassilidev.evict.desktop"
     cp "$lib/com.vassilidev.evict.png" "$icons/"
     has update-desktop-database && update-desktop-database -q "$apps" 2> /dev/null || true
-    if has ldconfig && ! ldconfig -p 2> /dev/null | grep -q 'libwebkit2gtk-4\.1\.so\.0'; then
-      say "! Evict needs WebKitGTK 4.1: install libwebkit2gtk-4.1 (webkit2gtk-4.1, webkit2gtk4.1) with your package manager."
+    if has ldconfig && ! ldconfig -p 2> /dev/null | grep -Eq 'libwebkit2gtk-4\.(1\.so\.0|0\.so\.37)'; then
+      say "! Evict needs WebKitGTK 4.1 or 4.0: install libwebkit2gtk-4.1 (webkit2gtk-4.1, webkit2gtk4.1) with your package manager."
     fi ;;
   *) die "unknown package type: $kind" ;;
 esac
 
 # A package manager can report success and still leave nothing runnable: check before saying so
 if [ "$kind" = tar.gz ]; then [ -x "$lib/evict" ]; else [ -x /usr/lib/evict/evict ]; fi || die "Evict isn't in place after the install."
+# Walks /usr once in the background and keeps its sizes: the first scan already skips it
+if [ "$kind" = tar.gz ]; then "$lib/evict-scan" /usr; else /usr/lib/evict/evict-scan /usr; fi > /dev/null 2>&1 &
 say "✓ Evict ${version:-} installed. Open it from your applications menu, or run: evict"
