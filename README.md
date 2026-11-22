@@ -240,7 +240,7 @@ test.sh           checks the scanner's total against `du` on a test folder
 docs/             website (GitHub Pages): home, download page, Linux installer (install.sh), README images
 ```
 
-Every push runs the [CI](.github/workflows/ci.yml): the scanner test on macOS and Linux; the universal macOS build and DMG, then the app installed from the DMG, started, quit and removed ([macos/smoke.sh](macos/smoke.sh)); the Linux build in an Ubuntu 22.04 container (the oldest glibc supported) for x86_64 and ARM64, with the `.deb`, `.rpm`, Arch package and tarball; then [on every supported distribution](.github/workflows/linux-distros.yml), x86_64 and ARM64, each in a fresh container, the [one-line installer](docs/install.sh) installs the package, Evict starts on a virtual display, scans and shows its map, and is uninstalled with nothing left behind ([linux/smoke.sh](linux/smoke.sh)). Pushing a `v*` tag runs the [release workflow](.github/workflows/release.yml): the Linux packages are published as soon as they're built and the same matrix runs again on the published release, through the website's installer, as users get it; the release becomes "latest" once Apple has notarized the DMG. The [website](.github/workflows/pages.yml) is deployed minified from `docs/` on every change.
+Every push runs the [CI](.github/workflows/ci.yml): the scanner test on macOS and Linux; the universal macOS build and DMG, then the app installed from the DMG, started, quit and removed ([macos/smoke.sh](macos/smoke.sh)); the Linux build in an Ubuntu 22.04 container (the oldest glibc supported) for x86_64 and ARM64, with the `.deb`, `.rpm`, Arch package and tarball; then [on every supported distribution](.github/workflows/linux-distros.yml), x86_64 and ARM64, each in a fresh container, the [one-line installer](docs/install.sh) installs the package, Evict starts on a virtual display, scans and shows its map, and is uninstalled with nothing left behind ([linux/smoke.sh](linux/smoke.sh)). Pushing a `v*` tag runs the [release workflow](.github/workflows/release.yml): the Linux packages are published as soon as they're built and the same matrix runs again on the published release, through the website's installer, as users get it; the release becomes "latest" once Apple has notarized the DMG, and when Apple takes longer than the release, [a scheduled workflow](.github/workflows/notarized.yml) publishes that same DMG as soon as Apple accepts it. The [website](.github/workflows/pages.yml) is deployed minified from `docs/` on every change.
 
 ### Porting to a new platform
 
@@ -270,7 +270,7 @@ Before the page loads, the app sets `window.evictClaude` (Claude Code found) and
 
 ```sh
 # bump CFBundleShortVersionString in macos/Info.plist, commit, then:
-git tag v1.11.1 && git push origin v1.11.1
+git tag v1.11.2 && git push origin v1.11.2
 ```
 
 ## FAQ

@@ -2,8 +2,9 @@ name: Release
 
 # Push a tag like v1.2.0 (matching CFBundleShortVersionString in macos/Info.plist) to publish a release.
 # With the signing secrets set, the DMG is signed with Developer ID and notarized by Apple.
-# The Linux packages are published as soon as they're built; Apple's notarization can take hours, so the release only
-# becomes "latest" (what the macOS updater and download links use) once its DMG is attached.
+# The Linux packages are published as soon as they're built. The release only becomes "latest" (what the macOS updater
+# and download links use) once its DMG is attached: Apple's notarization can take hours, so a DMG Apple hasn't
+# accepted after 30 minutes is kept as an artifact, and notarized.yml publishes it when Apple does.
 on:
   push:
     tags: ['v*']
@@ -14,7 +15,7 @@ permissions:
 jobs:
   dmg:
     runs-on: macos-15
-    timeout-minutes: 240
+    timeout-minutes: 90
     env:
       SIGNED: ${{ secrets.DEVELOPER_ID_P12 != '' }}
     steps:
@@ -50,6 +51,7 @@ jobs:
           NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_TIMEOUT: 30m
         run: ./build.sh dmg
 
       - name: Check the page
@@ -68,15 +70,28 @@ jobs:
         run: macos/smoke.sh .build/Evict.dmg
 
       - name: Publish the DMG
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          tag=$GITHUB_REF_NAME
-          gh release create "$tag" .build/Evict.dmg --title "Evict ${tag#v}" --generate-notes --latest=false \
-            || gh release upload "$tag" .build/Evict.dmg --clobber
-          # An older tag finishing late must not take "latest" back
-          newest=$(gh api "repos/$GITHUB_REPOSITORY/tags?per_page=100" --jq '.[].name' | grep '^v' | sort -V | tail -n 1)
-          if [ "$newest" = "$tag" ]; then gh release edit "$tag" --latest; fi
+          if [ -f .build/notary-id ]; then
+            echo "::notice::Apple is still notarizing the DMG: notarized.yml publishes it once Apple accepts it"
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          else
+            macos/publish.sh "$GITHUB_REF_NAME" .build/Evict.dmg
+          fi
+
+      - name: Keep the DMG for notarized.yml
+        if: steps.publish.outputs.pending == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: evict-dmg
+          path: |
+            .build/Evict.dmg
+            .build/notary-id
+          include-hidden-files: true
+          if-no-files-found: error
 
   linux:
     name: Linux ${{ matrix.arch }}

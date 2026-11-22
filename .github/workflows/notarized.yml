@@ -1,0 +1,85 @@
+name: Notarized DMG
+
+# Finishes a release whose DMG Apple was still notarizing when release.yml ran: once Apple accepts that same DMG,
+# staples it, installs it like a user, and publishes it (the release then becomes "latest").
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency: notarized
+
+jobs:
+  pending:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+      run: ${{ steps.find.outputs.run }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Only the newest tag matters: an older DMG would be outdated anyway
+          tag=$(gh api "repos/$GH_REPO/tags?per_page=100" --jq '.[].name' | grep '^v' | sort -V | tail -n 1)
+          if gh release view "$tag" --json assets --jq '.assets[].name' 2> /dev/null | grep -qx Evict.dmg; then exit 0; fi
+          run=$(gh run list --workflow release.yml --branch "$tag" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          [ -n "$run" ] || exit 0
+          gh api "repos/$GH_REPO/actions/runs/$run/artifacts" \
+            --jq '.artifacts[] | select(.name == "evict-dmg" and (.expired | not)) | .name' | grep -q . || exit 0
+          echo "$tag: DMG waiting for Apple (release run $run)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: pending
+    if: needs.pending.outputs.tag != ''
+    runs-on: macos-15
+    env:
+      TAG: ${{ needs.pending.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.pending.outputs.tag }}
+
+      - name: Get the DMG
+        run: gh run download ${{ needs.pending.outputs.run }} -n evict-dmg -D .build
+
+      - name: Ask Apple
+        id: apple
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          id=$(cat .build/notary-id)
+          auth="--apple-id $NOTARY_APPLE_ID --team-id $NOTARY_TEAM_ID --password $NOTARY_PASSWORD"
+          # shellcheck disable=SC2086
+          xcrun notarytool info "$id" $auth 2>&1 | tee notary.log
+          if grep -q 'status: Accepted' notary.log; then
+            xcrun stapler staple .build/Evict.dmg
+            spctl --assess --type open --context context:primary-signature --verbose .build/Evict.dmg
+            echo "accepted=true" >> "$GITHUB_OUTPUT"
+          elif grep -q 'status: In Progress' notary.log; then
+            echo "::notice::Apple is still notarizing $TAG (submission $id)"
+          else
+            # shellcheck disable=SC2086
+            xcrun notarytool log "$id" $auth || true
+            echo "::error::Apple didn't notarize $TAG (submission $id)"
+            exit 1
+          fi
+
+      - name: Install from the DMG, start, quit and remove
+        if: steps.apple.outputs.accepted == 'true'
+        run: macos/smoke.sh .build/Evict.dmg
+
+      - name: Publish the DMG
+        if: steps.apple.outputs.accepted == 'true'
+        run: macos/publish.sh "$TAG" .build/Evict.dmg

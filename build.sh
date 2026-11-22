@@ -97,9 +97,17 @@ if [ -n "$identity" ]; then
     # Usually a few minutes, but Apple can take much longer (first submissions of a new account especially)
     echo "→ Notarizing"
     # shellcheck disable=SC2086
-    xcrun notarytool submit .build/Evict.dmg $notary --wait --timeout 3h | tee .build/notary.log
-    grep -q 'status: Accepted' .build/notary.log || { echo "Notarization failed"; exit 1; }
-    xcrun stapler staple .build/Evict.dmg
+    rm -f .build/notary-id
+    xcrun notarytool submit .build/Evict.dmg $notary --wait --timeout "${NOTARY_TIMEOUT:-3h}" 2>&1 | tee .build/notary.log
+    if grep -q 'status: Accepted' .build/notary.log; then
+      xcrun stapler staple .build/Evict.dmg
+    elif grep -q 'Timeout of' .build/notary.log; then
+      # Not refused, just slow: the submission id lets .github/workflows/notarized.yml staple this same DMG later
+      sed -n 's/^ *id: //p' .build/notary.log | head -n 1 > .build/notary-id
+      echo "→ Apple is still notarizing (submission $(cat .build/notary-id)): DMG signed, not stapled yet"
+    else
+      echo "Notarization failed"; exit 1
+    fi
   else
     echo "→ No notarization credentials: DMG signed but not notarized"
   fi
