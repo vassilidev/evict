@@ -533,7 +533,8 @@ struct ContentView: View {
                     Button("Try Again") { model.scan() }
                 }
             default:
-                if let page = model.page { WebView(url: page, model: model).ignoresSafeArea() } else { ScanningView() }
+                // Below the toolbar, not under it: the page's header must stay visible
+                if let page = model.page { WebView(url: page, model: model) } else { ScanningView() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
