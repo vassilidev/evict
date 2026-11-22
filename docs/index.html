@@ -280,7 +280,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
  "downloadUrl": "https://vassilidev.github.io/evict/download.html",
  "applicationCategory": "UtilitiesApplication",
  "operatingSystem": "macOS 13+, Linux",
- "softwareVersion": "1.11.0",
+ "softwareVersion": "1.11.1",
  "screenshot": "https://vassilidev.github.io/evict/screenshot.png",
  "image": "https://vassilidev.github.io/evict/og.png",
  "featureList": [
@@ -377,7 +377,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
    "name": "Which Linux distributions are supported?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Any 64-bit desktop (x86_64 or ARM64) with glibc 2.34 or later and WebKitGTK 4.1. Evict is installed and started on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10 on every change. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported. The install script picks the right package for your distribution."
+    "text": "Any 64-bit desktop (x86_64 or ARM64) with glibc 2.34 or later and WebKitGTK 4.1. Evict is installed, started and uninstalled on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10 on every change. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported. The install script picks the right package for your distribution."
    }
   },
   {
@@ -643,7 +643,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
       <details><summary>Will the scan slow my computer down?</summary><p>For a few seconds, Evict reads file names and sizes, never their content. On macOS it doesn't download iCloud files that are only in the cloud, and nothing runs in the background once the map is on screen.</p></details>
       <details><summary>Why does it ask for Full Disk Access on macOS?</summary><p>Without it, macOS hides part of the disk (Mail, Messages, other apps' data) and interrupts the scan with a permission prompt for each protected folder. With it, Evict sees everything in one go. You can still scan without it.</p></details>
       <details><summary>What does "Rescan as Administrator" do on Linux?</summary><p>A normal user can't read everything: Docker images in /var/lib/docker, system logs, other users' homes. That space shows up as "not visible to the scan". Rescan as Administrator asks for your password through the system's polkit prompt and reads it all. Deleting items owned by root also asks for it.</p></details>
-      <details><summary>Which Linux distributions are supported?</summary><p>Any 64-bit desktop (x86_64 or ARM64) with glibc 2.34 or later and WebKitGTK 4.1. Evict is installed and started on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10 on every change. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported. The install script picks the right package for your distribution.</p></details>
+      <details><summary>Which Linux distributions are supported?</summary><p>Any 64-bit desktop (x86_64 or ARM64) with glibc 2.34 or later and WebKitGTK 4.1. Evict is installed, started and uninstalled on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10 on every change. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported. The install script picks the right package for your distribution.</p></details>
       <details><summary>What does "Regenerable" mean?</summary><p>Caches, build outputs and dependencies: node_modules, DerivedData, .venv, Caches and the like. Apps and tools recreate them when they need them, so deleting them frees space without losing your work. The next build or launch may just take a little longer.</p></details>
       <details><summary>Do I need Claude to use Evict?</summary><p>No. Everything works without it. Ask Claude and Quick wins use Claude Code if it's installed on your computer; otherwise Evict copies a ready-made prompt you can paste into any AI chat.</p></details>
       <details><summary>Why is the total different from what my system shows?</summary><p>Evict counts the real space each file takes. Copies that share their space with the original (APFS clones on macOS, reflinks and snapshots on Btrfs or ZFS) are counted at full size, so the total can be a little higher. APFS snapshots can't be seen by any app and show up as invisible space.</p></details>

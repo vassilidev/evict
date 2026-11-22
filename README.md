@@ -108,7 +108,7 @@ The script picks the native package for your distribution: apt gets the `.deb`, 
 curl -fsSL https://vassilidev.github.io/evict/install.sh | sh -s -- --uninstall
 ```
 
-**Requirements**: x86_64 or ARM64, glibc 2.34 or later, WebKitGTK 4.1 (GTK 3). CI installs and starts Evict on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10, on x86_64 and ARM64 (on Rocky and Alma, the installer enables EPEL for WebKitGTK). Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported.
+**Requirements**: x86_64 or ARM64, glibc 2.34 or later, WebKitGTK 4.1 (GTK 3). CI installs, starts and uninstalls Evict on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10, on x86_64 and ARM64 (on Rocky and Alma, the installer enables EPEL for WebKitGTK). Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported.
 
 **Manual install**: every release ships packages for both architectures, listed on the [download page](https://vassilidev.github.io/evict/download.html) with their checksums. Replace `x86_64` with `aarch64` on ARM.
 
@@ -229,9 +229,9 @@ Benchmarks against `gdu`, `dua` and `ncdu` on Linux are to come.
 scan.c            scanner (C, no dependencies, macOS and Linux)  →  JSON of the pruned tree
 index.html        interface (plain HTML/CSS/JS), shared by the apps and the CLI  ←  data injected into the page
 macos/            macOS app (SwiftUI + WKWebView, native bridge, self-updater; Info.plist holds the version),
-                  DMG window background (dmg-background.html, rendered to .tiff)
+                  DMG window background (dmg-background.html, rendered to .tiff), smoke.sh (DMG install test)
 linux/            Linux app (evict.c: GTK 3 + WebKitGTK, same bridge), build.sh, package.sh (Docker build of the
-                  release files), smoke.sh (install + start test), desktop entry, polkit policy, nfpm packaging
+                  release files), smoke.sh (install, start, uninstall test), desktop entry, polkit policy, nfpm packaging
 evict             CLI script: scan + page + open in the browser
 build.sh          builds a universal Evict.app (Apple Silicon + Intel); "./build.sh dmg" makes the DMG
 minify.py         minifies the page shipped in the apps and the website at deploy time (esbuild)
@@ -240,7 +240,7 @@ test.sh           checks the scanner's total against `du` on a test folder
 docs/             website (GitHub Pages): home, download page, Linux installer (install.sh), README images
 ```
 
-Every push runs the [CI](.github/workflows/ci.yml): the scanner test on macOS and Linux, the universal macOS build and DMG, the Linux build in an Ubuntu 22.04 container (the oldest glibc supported) for x86_64 and ARM64 with the `.deb`, `.rpm`, Arch package and tarball, then on each supported distribution, in a container, the [one-line installer](docs/install.sh) installs the package and Evict starts on a virtual display, scans and shows its map ([smoke.sh](linux/smoke.sh)). Pushing a `v*` tag runs the [release workflow](.github/workflows/release.yml): the Linux packages are published as soon as they're built, and the release becomes "latest" once Apple has notarized the DMG. The [website](.github/workflows/pages.yml) is deployed minified from `docs/` on every change.
+Every push runs the [CI](.github/workflows/ci.yml): the scanner test on macOS and Linux; the universal macOS build and DMG, then the app installed from the DMG, started, quit and removed ([macos/smoke.sh](macos/smoke.sh)); the Linux build in an Ubuntu 22.04 container (the oldest glibc supported) for x86_64 and ARM64, with the `.deb`, `.rpm`, Arch package and tarball; then [on every supported distribution](.github/workflows/linux-distros.yml), x86_64 and ARM64, each in a fresh container, the [one-line installer](docs/install.sh) installs the package, Evict starts on a virtual display, scans and shows its map, and is uninstalled with nothing left behind ([linux/smoke.sh](linux/smoke.sh)). Pushing a `v*` tag runs the [release workflow](.github/workflows/release.yml): the Linux packages are published as soon as they're built and the same matrix runs again on the published release, through the website's installer, as users get it; the release becomes "latest" once Apple has notarized the DMG. The [website](.github/workflows/pages.yml) is deployed minified from `docs/` on every change.
 
 ### Porting to a new platform
 
@@ -270,7 +270,7 @@ Before the page loads, the app sets `window.evictClaude` (Claude Code found) and
 
 ```sh
 # bump CFBundleShortVersionString in macos/Info.plist, commit, then:
-git tag v1.11.0 && git push origin v1.11.0
+git tag v1.11.1 && git push origin v1.11.1
 ```
 
 ## FAQ
@@ -283,7 +283,7 @@ git tag v1.11.0 && git push origin v1.11.0
 
 **Why is part of my Linux disk "not visible to the scan"?** A normal user can't read some folders: Docker images, system logs, other users' homes. **Rescan as Administrator** reads them after the polkit password prompt.
 
-**Which Linux distributions work?** Any 64-bit glibc distribution (2.34+) with WebKitGTK 4.1. CI installs and starts Evict on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10, on x86_64 and ARM64. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported.
+**Which Linux distributions work?** Any 64-bit glibc distribution (2.34+) with WebKitGTK 4.1. CI installs, starts and uninstalls Evict on Ubuntu 22.04, 24.04 and 26.04, Debian 12 and 13, Linux Mint 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 10, on x86_64 and ARM64. Debian 11 and Rocky, Alma or RHEL 9 lack WebKitGTK 4.1; musl distributions like Alpine aren't supported.
 
 ## Known limitations
 

@@ -35,6 +35,9 @@ jobs:
           grep -q 'window.DATA = null; /\* __DATA__ \*/' "$page"
           test "$(wc -c < "$page")" -lt "$(wc -c < index.html)"  # the minifier really ran
 
+      - name: Install from the DMG, start, quit and remove
+        run: macos/smoke.sh .build/Evict.dmg
+
       - uses: actions/upload-artifact@v4
         with:
           name: Evict.dmg
@@ -71,45 +74,7 @@ jobs:
           include-hidden-files: true  # .build/ is a hidden folder
           if-no-files-found: error
 
-  # Install with docs/install.sh on each supported distribution and start the app on a virtual display
+  # Install, start and uninstall on each supported distribution
   distros:
-    name: ${{ matrix.distro.image }} ${{ matrix.arch }}
     needs: linux
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, aarch64]
-        distro:
-          - {image: 'ubuntu:22.04', ext: deb}
-          - {image: 'ubuntu:24.04', ext: deb}
-          - {image: 'ubuntu:26.04', ext: deb}
-          - {image: 'debian:12', ext: deb}
-          - {image: 'debian:13', ext: deb}
-          - {image: 'linuxmintd/mint21-amd64', ext: deb}
-          - {image: 'linuxmintd/mint22-amd64', ext: deb}
-          - {image: 'kalilinux/kali-rolling', ext: deb}
-          - {image: 'fedora:41', ext: rpm}
-          - {image: 'fedora:42', ext: rpm}
-          - {image: 'fedora:43', ext: rpm}
-          - {image: 'opensuse/tumbleweed', ext: rpm}
-          - {image: 'opensuse/leap:15.6', ext: rpm}
-          - {image: 'opensuse/leap:16.0', ext: rpm}
-          - {image: 'almalinux:10', ext: rpm}
-          - {image: 'rockylinux/rockylinux:10', ext: rpm}
-          - {image: 'archlinux:latest', ext: pkg.tar.zst}
-          - {image: 'manjarolinux/base', ext: pkg.tar.zst}
-        exclude:  # images only published for x86_64
-          - {arch: aarch64, distro: {image: 'linuxmintd/mint21-amd64', ext: deb}}
-          - {arch: aarch64, distro: {image: 'linuxmintd/mint22-amd64', ext: deb}}
-          - {arch: aarch64, distro: {image: 'archlinux:latest', ext: pkg.tar.zst}}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: evict-linux-${{ matrix.arch }}
-          path: .build
-
-      - name: Install and run
-        run: docker run --rm -v "$PWD:/src:ro" -w /src "${{ matrix.distro.image }}" sh linux/smoke.sh ".build/evict-linux-${{ matrix.arch }}.${{ matrix.distro.ext }}"
+    uses: ./.github/workflows/linux-distros.yml

@@ -64,6 +64,9 @@ jobs:
           codesign --verify --deep --strict --verbose=2 .build/Evict.app
           spctl --assess --type execute --verbose .build/Evict.app || echo "Gatekeeper assessment needs notarization"
 
+      - name: Install from the DMG, start, quit and remove
+        run: macos/smoke.sh .build/Evict.dmg
+
       - name: Publish the DMG
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,7 +98,7 @@ jobs:
       - name: Build the app and packages (Ubuntu 22.04 container, the oldest glibc supported)
         run: linux/package.sh
 
-      - name: Install and run on Ubuntu 24.04
+      - name: Install, start and uninstall on Ubuntu 24.04
         run: docker run --rm -v "$PWD:/src:ro" -w /src ubuntu:24.04 sh linux/smoke.sh ".build/evict-linux-${{ matrix.arch }}.deb"
 
       - uses: actions/upload-artifact@v4
@@ -125,3 +128,10 @@ jobs:
           ls -l dist
           gh release create "$tag" dist/* --title "Evict ${tag#v}" --generate-notes --latest=false \
             || gh release upload "$tag" dist/* --clobber
+
+  # The published release, as users get it: the website's installer on every supported distribution
+  verify-linux:
+    needs: publish-linux
+    uses: ./.github/workflows/linux-distros.yml
+    with:
+      version: ${{ github.ref_name }}

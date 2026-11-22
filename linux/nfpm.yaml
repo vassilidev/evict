@@ -24,6 +24,10 @@ overrides:
   archlinux:
     depends: [webkit2gtk-4.1, curl]
 contents:
+  - dst: /usr/lib/evict  # owned, so removing the package removes the folder too
+    type: dir
+    file_info:
+      mode: 0755
   - src: .build/linux/evict/evict
     dst: /usr/lib/evict/evict
   - src: .build/linux/evict/evict-scan
