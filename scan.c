@@ -731,9 +731,10 @@ static void scan_dir(Job j, char *buf, Stack *local) {
                         (e->EaSize != IO_REPARSE_TAG_MOUNT_POINT && e->EaSize != IO_REPARSE_TAG_SYMLINK))
                         add_dir(&s, ename, nlen);
                 } else {
-                    // Listings don't give the link count: on NTFS every file goes through the hard link set
-                    add_file(&s, ename, nlen, (uint64_t)e->AllocationSize.QuadPart, ntfs ? 2 : 1,
-                             (uint64_t)e->FileId.QuadPart ^ vol);
+                    // Listings don't give the link count: on NTFS every file goes through the hard link set, unless it has
+                    // no real id (0 or -1, as some file system filters report): those would all look like one file
+                    uint64_t id = (uint64_t)e->FileId.QuadPart;
+                    add_file(&s, ename, nlen, (uint64_t)e->AllocationSize.QuadPart, ntfs && id + 1 > 1 ? 2 : 1, id ^ vol);
                 }
             }
             if (!e->NextEntryOffset) break;
