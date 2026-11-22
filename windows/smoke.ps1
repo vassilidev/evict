@@ -45,6 +45,11 @@ $watch.Stop()
 Write-Host ("Installed in {0:N1} s" -f $watch.Elapsed.TotalSeconds)
 if (-not (Test-Path $shortcut)) { Fail 'no Start menu entry' }
 if (-not (Test-Path $uninstall)) { Fail 'not listed in Settings > Apps' }
+# The icons as Windows shows them, kept with the screenshots: a broken icon comes out as Windows' generic one
+Add-Type -AssemblyName System.Drawing
+$icons = @{app = "$dir\Evict.exe"}
+if ($Setup) { $icons.setup = (Resolve-Path $Setup).Path }
+foreach ($name in $icons.Keys) { [System.Drawing.Icon]::ExtractAssociatedIcon($icons[$name]).ToBitmap().Save("$shots\evict-icon-$name.png") }
 $version = (Get-Item "$dir\Evict.exe").VersionInfo.ProductVersion
 if ($env:EVICT_VERSION -and $version -ne $env:EVICT_VERSION.TrimStart('v')) { Fail "expected Evict $env:EVICT_VERSION, got $version" }
 $arch = $env:PROCESSOR_ARCHITECTURE
