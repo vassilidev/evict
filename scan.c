@@ -77,7 +77,7 @@ typedef struct Dir {
     fd_t fd;
     _Atomic int refs;
 #ifdef _WIN32
-    uint64_t vol;  // volume serial, mixed into file ids
+    uint64_t vol;  // the drive letter, mixed into file ids
     int ntfs;      // file ids are unique there, so hard links can be told apart
 #endif
 } Dir;
@@ -678,10 +678,11 @@ static void scan_dir(Job j, char *buf, Stack *local) {
     int ntfs = 0;
     if (from) vol = from->vol, ntfs = from->ntfs;
     else if (!BAD_FD(fd)) {
-        DWORD serial = 0;
         WCHAR fs[32] = L"";
-        GetVolumeInformationByHandleW(fd, NULL, 0, &serial, NULL, NULL, fs, 32);
-        vol = (uint64_t)serial << 48;
+        GetVolumeInformationByHandleW(fd, NULL, 0, NULL, NULL, NULL, fs, 32);
+        // An NTFS file id is a 48-bit record number under 2^32 (the most files a volume holds) and a 16-bit sequence:
+        // the drive letter goes in the record bits NTFS never uses, so files of two drives can't share a key
+        vol = (uint64_t)(unsigned char)(dname[0] == '/' ? dname[1] : dname[0]) << 40;
         ntfs = !wcscmp(fs, L"NTFS");
     }
 #else
