@@ -36,8 +36,8 @@
 - **A light scan screen** (app): blocks build up while the disk is read, with the real item count, volume, elapsed time and speed (items per second), streamed by the scanner every 300 ms. The animation only moves layers on the GPU, so the scan keeps its full speed.
 - **A treemap**, finviz-style: each box's area is proportional to the space it takes. Click to drill into a folder, use the breadcrumb to go back up.
 - **A list view**: the same folder as a tree sorted by size, with bars and percentages. Expand folders in place to see the biggest items at a glance.
-- **Search** (`⌘F` or `/`) across the whole scan: every file and folder whose name matches, biggest first, with their total size. Click a result to jump to it.
-- **Filter by extension**: type `.mov .mp4` (or click one of the extensions that weigh the most, listed as soon as you click the search field) to see every video, disk image or archive on the disk.
+- **Search** (`⌘K`, `⌘F` or `/`): a palette opens over the blurred map. With nothing typed it lists the largest files on the disk; otherwise every file and folder whose name matches, biggest first, as cards with their size, location and a size gauge. `↑` `↓` to move, `↵` to jump to the item, `⌘↵` to show it in Finder, `⌘Y` to preview it.
+- **Filter by extension**: type `.mov .mp4`, or click one of the extensions that weigh the most, right under the search field, to see every video, disk image or archive on the disk.
 - **Trash and Downloads at a glance**: two shortcuts in the header show their size and open them in one click, including every Downloads folder on the disk. Items you move to the Trash from Evict show up there, and **Empty Trash…** frees the space for good.
 - **Ask Claude** what a folder or file is: what it is, which app creates it, whether it's safe to delete (✅ / ⚠️ / ⛔) and how to clean it properly. Nothing is ever deleted for you.
 - **✦ Quick wins**: a personal cleanup plan for the whole disk. Evict sends Claude a digest of the scan (the folder tree down to about 1 GB, regenerable folders, large files) and gets back the safest, biggest gains first, what needs your judgment and what to leave alone, with each app's own cleanup command.
@@ -52,6 +52,7 @@
 - **Preview anything**: press `Space` on a file, like in the Finder. Quick Look opens photos, videos, PDFs, Office and iWork documents, text, CSV, code and audio; with a selection, the arrows go from one item to the next. **Show contents** lists what's inside zip, rar, 7z, tar.gz, iso and other archives, biggest files first, and **Open with default app** opens the file.
 - **Select many, delete once**: checkboxes in the list and in search results, `⌘`-click on the map, `Shift`-click for a range, **Select all** on a search (`.mov`, `node_modules`…). The selection stays while you search and browse; a bar shows its total size, lets you review it, show it in Finder or delete it all at once.
 - **Built-in cleanup** (app): move to Trash, delete permanently or empty the Trash. The administrator password is only asked for when needed, and system paths are protected.
+- **Careful with secrets**: `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.kube` and the keychains can't be deleted, and before any deletion Evict looks inside for `.env` files, private keys (`.pem`, `.key`, `.p12`, `id_rsa`…) and credentials, and lists them in the confirmation: they're often in no git repository or backup.
 - **Show in Finder** for any file or folder.
 - **Hide a folder** (`System`, for example) to give the rest more room. The choice is remembered across scans.
 - **Built-in updates**: Evict checks GitHub for new versions at launch and every 6 hours, tells you when one is out, and installs it in one click.
@@ -104,13 +105,13 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | Double-click a folder (list) | Drill into it |
 | Click a file · right-click · `⋯` | Menu: open, show in Finder, copy path, ask AI, hide, delete |
 | **Map** / **List** | Switch views (remembered) |
-| `⌘F` or `/` | Search files and folders · `Esc` clears |
+| `⌘K`, `⌘F` or `/` | Search palette · `Esc` closes |
 | Checkbox · `⌘`-click · `Shift`-click · `⌘A` | Select · add to the selection · select a range · select every row shown |
 | `Esc` with a selection | Clear the selection |
 | `Space` | Preview the item under the mouse, or the selection (Quick Look); archives show their contents |
-| `.mov .mp4` in the search field | Filter by extension |
+| `.mov .mp4` in the search palette | Filter by extension |
 | **Trash** / **Downloads** | Open them · **Empty Trash…** when you're in the Trash |
-| **Ask Claude** / **Copy AI prompt** | Ask what the current folder is |
+| **⋯** next to the path | Current folder: show in Finder, copy path, ask Claude, delete |
 | **✦ Quick wins** | A personal cleanup plan for the whole disk |
 | Click a path in Claude's answer | Jump to it in the map |
 | `⌫` or `Esc` | Go up one level |
@@ -155,7 +156,7 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 
 ```sh
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
-git tag v1.8.0 && git push origin v1.8.0
+git tag v1.9.0 && git push origin v1.9.0
 ```
 
 ## Known limitations

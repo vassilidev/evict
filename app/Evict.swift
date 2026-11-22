@@ -21,7 +21,11 @@ struct EvictApp: App {
                     if model.state == .idle { model.start() }
                     model.watchForUpdates()
                 }
+                // A compact toolbar in the page's color, so the window reads as one surface
+                .toolbarBackground(Color(red: 0.047, green: 0.055, blue: 0.071), for: .windowToolbar)
+                .toolbarBackground(.visible, for: .windowToolbar)
         }
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") { Task { await model.checkForUpdates(manual: true) } }
@@ -223,6 +227,7 @@ final class Model: ObservableObject {
               path.split(separator: "/").count >= 2 else { return false }
         if path.range(of: #"^/(System|private|usr|bin|sbin|cores)(/|$)"#, options: .regularExpression) != nil { return false }
         if path.range(of: #"^/Users/[^/]+(/Library|/\.Trash)?$"#, options: .regularExpression) != nil { return false }
+        if path.range(of: #"^/Users/[^/]+/(\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.password-store|\.config/gcloud|Library/Keychains)(/|$)"#, options: .regularExpression) != nil { return false }
         return true
     }
 
@@ -246,6 +251,12 @@ final class Model: ObservableObject {
         }
         alert.informativeText += allInTrash ? "Already in the Trash: deleted permanently."
             : "The Trash keeps \(items.count > 1 ? "them" : "it") recoverable, but the space is only freed once the Trash is emptied."
+        let secrets = Model.secrets(in: items.map(\.path))
+        if !secrets.isEmpty {
+            let home = NSHomeDirectory(), shown = secrets.prefix(6).map { "• " + $0.replacingOccurrences(of: home, with: "~") }
+            alert.informativeText += "\n\n⚠️ Secrets inside, often in no git repository or backup:\n" + shown.joined(separator: "\n")
+                + (secrets.count > 6 ? "\n• and more" : "")
+        }
         if !allInTrash { alert.addButton(withTitle: "Move to Trash") }
         alert.addButton(withTitle: "Delete Permanently").hasDestructiveAction = true
         alert.addButton(withTitle: "Cancel")
@@ -294,6 +305,33 @@ final class Model: ObservableObject {
         }
         guard let arg = try? String(data: JSONEncoder().encode(path), encoding: .utf8) else { return }
         webView?.evaluateJavaScript("evictEmptied(\(arg))")
+    }
+
+    // Secrets (.env, private keys, credentials) found in what's about to be deleted. A quick look: heavy dependency
+    // folders are skipped and the walk stops after a second, so a huge folder can hide some
+    nonisolated static func secrets(in paths: [String]) -> [String] {
+        let deadline = Date().addingTimeInterval(1)
+        var found: [String] = []
+        for path in paths {
+            if isSecret((path as NSString).lastPathComponent) { found.append(path); continue }
+            guard let walker = FileManager.default.enumerator(at: URL(fileURLWithPath: path), includingPropertiesForKeys: nil) else { continue }
+            for case let url as URL in walker {
+                let name = url.lastPathComponent
+                if name.range(of: #"^(node_modules|\.git|vendor|Pods|DerivedData|\.venv|venv|__pycache__|\.next|target)$"#, options: .regularExpression) != nil {
+                    walker.skipDescendants()
+                } else if isSecret(name) {
+                    found.append(url.path)
+                }
+                if found.count >= 50 || Date() > deadline { return found }
+            }
+        }
+        return found
+    }
+
+    nonisolated static func isSecret(_ name: String) -> Bool {
+        name.range(of: #"^(\.env(\..+)?|id_(rsa|dsa|ecdsa|ed25519)|\.npmrc|\.netrc|\.pgpass|credentials(\.json)?|.+\.(pem|key|p12|pfx|keystore|jks|kdbx|ovpn))$"#,
+                   options: [.regularExpression, .caseInsensitive]) != nil
+            && name.range(of: #"\.(example|sample|template)$"#, options: .regularExpression) == nil
     }
 
     // Files owned by root or another user: retry with the native administrator password prompt
