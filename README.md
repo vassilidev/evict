@@ -80,6 +80,7 @@
 ### Fast
 
 - **The whole disk in about 20 s on macOS**: 5.7 million files (426 GB) on a Mac mini M4 Pro, 27 s cold, right after a reboot. On Windows, 1.4 million items in 6.4 s on a CI runner once the disk is in cache. Linux benchmarks are to come.
+- **System folders read once**: the parts of the system that only change with an update (the macOS system volume, `/usr` on Linux, `C:\Windows` and `System32`) are walked once and remembered until the next update.
 - **A light scan screen**: blocks build up while the disk is read, with the real item count, volume, elapsed time and items per second. The animation only moves layers on the GPU, so the scan keeps its full speed.
 - **Built-in updates**: Evict checks GitHub for new versions at launch and every 6 hours and tells you when one is out. On macOS and Windows it installs it in one click; on Linux, the install command updates it.
 
@@ -234,7 +235,7 @@ Measured on the same Mac (Apple M4 Pro, internal SSD, 5.7 M entries):
 6. **Real size on disk** (`ATTR_FILE_ALLOCSIZE`): hard links are counted once, and files under 1 MB are grouped. A whole-disk report weighs about 3 MB.
 7. **Nothing is counted twice**: the Data volume, reachable through firmlinks, and volumes from other containers are skipped.
 8. **No endless wait**: if a folder stays blocked behind a macOS permission prompt, the scan stops after 30 s without progress and returns partial results, with a warning.
-9. **System folders are walked once**: the sealed folders of the system (`/System` and `/usr` on macOS, `/usr` on Linux, `Windows` and `System32` on Windows) only change with a system update, so their sizes are kept and each one shows as a single block. On this Mac, `/System` goes from 5.7 s to 1.4 s. The sizes are filled in during the install (Windows, Linux) or while macOS asks for disk access, and dropped as soon as the system's version changes.
+9. **System folders are walked once**: the sealed system volume (`/System`, `/usr`) only changes with a macOS update, so its folders' sizes are kept and each one shows as a single block: `/System` goes from 5.7 s to 1.4 s. The sizes are filled in while macOS asks for disk access, and dropped as soon as the macOS version changes.
 
 ### Linux
 
@@ -244,6 +245,7 @@ The same `scan.c`, with the Linux system calls:
 2. **`openat(parent, name)`**, a **local stack per thread** and **8 threads**, as on macOS.
 3. **Real disks only**: ext4, btrfs, xfs, f2fs, zfs… are read; `/proc`, `/sys`, tmpfs, overlay, network shares, FUSE, snap images and removable media (`/media`, `/run/media`) are skipped. A filesystem mounted twice (bind mounts) is read once, and the disk size adds up every disk read, so a separate `/home` partition counts.
 4. **Real size on disk**, folders included, hard links counted once: the total matches `du` (checked in CI on Ubuntu, and by hand on Fedora).
+5. **`/usr` is walked once**: it belongs to the package manager, so its folders' sizes are kept until the package database changes. The installer fills them in.
 
 Benchmarks against `gdu`, `dua` and `ncdu` on Linux are to come.
 
@@ -256,6 +258,7 @@ The same `scan.c`, with the NT system calls:
 3. **Every internal drive**: fixed drives (NTFS, ReFS, exFAT, FAT32) are read, removable and network drives aren't. Junctions and symbolic links aren't followed, so nothing is counted twice. OneDrive folders are read, online-only files count for what they take on disk (nothing), and nothing is downloaded.
 4. **Real size on disk** (allocated size), hard links counted once on NTFS by file id, so `WinSxS` doesn't count the system twice.
 5. **As administrator**, the backup privilege reads every folder whatever its permissions.
+6. **`Windows` and `System32` are walked once** per Windows update, except the folders that keep changing (`WinSxS`, `Temp`, `Logs`, `drivers`, `Prefetch`…): their sizes are kept until the build changes, and the installer fills them in.
 
 On GitHub's Windows runners (4 vCPUs), the app reads 1.4 million items in 6.4 s once the disk is in cache. Cold, the scan waits on the runner's throttled cloud disk (1.8 million items in about 8 minutes on Windows Server 2022). Benchmarks on a real PC against WizTree and WinDirStat are to come.
 
@@ -323,7 +326,7 @@ git tag v1.12.0 && git push origin v1.12.0
 
 **Why Full Disk Access on macOS?** Without it, macOS hides part of the disk (Mail, Messages, other apps' data) and interrupts the scan with a prompt per protected folder. You can still scan without it.
 
-**Why is part of my Linux disk "not visible to the scan"?** A normal user can't read some folders: Docker images, system logs, other users' homes. **Rescan as Administrator** reads them after the polkit password prompt.
+**Why is part of my disk "not visible to the scan"?** A normal account can't read some folders: Docker images, system logs and other users' homes on Linux; restore points, other users' profiles and some system folders on Windows. **Rescan as Administrator** reads them, after the polkit (Linux) or UAC (Windows) prompt. On macOS, Full Disk Access does the same. NTFS's own files (`$MFT`, the journal) and snapshots stay invisible to any scan that walks folders.
 
 **Which Linux distributions work?** Any 64-bit glibc distribution (2.31+) with WebKitGTK 4.1 or 4.0. CI installs, starts and uninstalls Evict on Ubuntu 20.04, 22.04, 24.04 and 26.04, Debian 11, 12 and 13, Linux Mint 20, 21 and 22, Pop!_OS, Kali, Fedora 41 to 43, openSUSE Leap 15.6, Leap 16 and Tumbleweed, Arch, Manjaro, EndeavourOS, Rocky Linux and AlmaLinux 9 and 10, on x86_64 and ARM64. musl distributions like Alpine aren't supported.
 
@@ -344,11 +347,11 @@ git tag v1.12.0 && git push origin v1.12.0
 ## Roadmap
 
 - [x] [Native Linux support](https://github.com/vassilidev/evict/issues/1): `getdents64` scanner, GTK + WebKitGTK app, `.deb`, `.rpm`, Arch and tarball packages, one-line installer
-- [ ] Linux benchmarks against `gdu`, `dua` and `ncdu`, cold and warm cache, and batched `statx` through io_uring if it's faster
 - [x] [Native Windows support](https://github.com/vassilidev/evict/issues/2): `NtQueryDirectoryFile` scanner, Win32 + WebView2 app, one installer for x64, ARM64 and x86, PowerShell installer, one-click updates
 - [x] Older systems: macOS 11, WebKitGTK 4.0 and glibc 2.31 on Linux (RHEL 9, Debian 11, Ubuntu 20.04)
 - [ ] Faster administrator scans on Windows by reading the NTFS MFT directly, like WizTree
 - [ ] A code-signed Windows installer, and a winget package
+- [ ] Benchmarks on real PCs against WizTree and WinDirStat, and on Linux against `gdu`, `dua` and `ncdu`, cold and warm cache (and batched `statx` through io_uring if it's faster)
 
 ## License
 

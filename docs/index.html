@@ -559,7 +559,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
         <p>Hide <code>/System</code> on macOS, <code>C:\Windows</code> on Windows, <code>/usr</code> and <code>/var</code> on Linux, or any folder, to give the rest of the map more room. Evict remembers it.</p>
       </li>
       <li class="tile">
-        <div class="mock" aria-hidden="true"><span class="vers">1.10 <i>→</i> 1.11</span><span class="upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>Update to 1.11</span></div>
+        <div class="mock" aria-hidden="true"><span class="vers">1.11 <i>→</i> 1.12</span><span class="upd"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>Update to 1.12</span></div>
         <h3>Updates built in</h3>
         <p>macOS and Windows install updates in one click, checked before they run. Linux tells you when a new version is out, and the same install command updates it.</p>
       </li>
@@ -601,6 +601,7 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
       <li style="--c:var(--purple)"><b>A stack per thread</b>: each thread walks its own branch and only shares work when another one is idle.</li>
       <li style="--c:var(--blue)"><b>Nothing counted twice</b>: hard links count once (on NTFS too), firmlinks on macOS and bind mounts on Linux are read once, junctions on Windows aren't followed.</li>
       <li style="--c:var(--green)"><b>Real disks only</b>: external drives and network shares are skipped, and on Linux /proc, /sys and snap images too.</li>
+      <li style="--c:var(--orange)"><b>System folders read once</b>: the macOS system volume, /usr on Linux, Windows and System32 only change with an update, so they're walked once and remembered until the next one.</li>
     </ul>
   </div>
 </section>
