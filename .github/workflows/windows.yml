@@ -1,0 +1,50 @@
+name: Windows
+
+# Evict's whole life on Windows Server 2022 and 2025 (x64) and Windows 11 (ARM64): the install script installs it, the
+# scanner is checked on a fixture and on the whole computer, the app starts and shows its map, then it's uninstalled
+# and nothing may be left (windows/smoke.ps1). The x86 build is checked on x64. CI runs it on the installer it just
+# built; the release workflow, on the published release.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Test this published version, installed from the website, instead of this run's installer
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published version to test, e.g. 1.12.0
+        required: true
+        type: string
+
+jobs:
+  windows:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025, windows-11-arm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: inputs.version == ''
+        uses: actions/download-artifact@v4
+        with:
+          name: evict-windows
+          path: .build
+
+      - name: Install, scan, start and uninstall
+        shell: pwsh
+        env:
+          EVICT_VERSION: ${{ inputs.version }}
+        run: |
+          if ($env:EVICT_VERSION) { ./windows/smoke.ps1 } else { ./windows/smoke.ps1 .build/Evict-Setup.exe }
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.os }}${{ inputs.version && '-release' || '' }}
+          path: ${{ runner.temp }}/evict-*.png
+          if-no-files-found: ignore

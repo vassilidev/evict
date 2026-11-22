@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds a universal (Apple Silicon + Intel) Evict.app in .build/, plus .build/Evict.dmg with "./build.sh dmg".
+# Builds a universal (Apple Silicon + Intel) Evict.app for macOS 11 or later in .build/, plus .build/Evict.dmg with "./build.sh dmg".
 # Signs with the "Developer ID Application" identity found in the keychain (ad-hoc otherwise), and notarizes
 # the DMG when credentials exist: keychain profile "evict" locally, or NOTARY_APPLE_ID / NOTARY_PASSWORD /
 # NOTARY_TEAM_ID in CI.
@@ -7,14 +7,21 @@ set -e
 cd "$(dirname "$0")"
 app=.build/Evict.app
 rm -rf "$app" .build/tmp
-mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" .build/tmp
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources" "$app/Contents/Frameworks" .build/tmp
 echo "→ Building the scanner"
-cc -O2 -arch arm64 -arch x86_64 -mmacosx-version-min=13.0 -o "$app/Contents/MacOS/evict-scan" scan.c
+cc -O2 -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 -o "$app/Contents/MacOS/evict-scan" scan.c
 echo "→ Building the app"
 for arch in arm64 x86_64; do
-  xcrun swiftc -O -swift-version 5 -parse-as-library -target "$arch-apple-macos13" -o ".build/tmp/Evict-$arch" macos/Evict.swift
+  xcrun swiftc -O -swift-version 5 -parse-as-library -target "$arch-apple-macos11" -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
+    -o ".build/tmp/Evict-$arch" macos/Evict.swift
 done
 lipo -create -output "$app/Contents/MacOS/Evict" .build/tmp/Evict-arm64 .build/tmp/Evict-x86_64
+# Swift concurrency ships with macOS 12 and later; macOS 11 loads this copy, newer systems their own (/usr/lib/swift comes first)
+dev=$(xcode-select -p)
+for lib in "$dev/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.5/macosx" "$dev/usr/lib/swift-5.5/macosx" none; do
+  [ -f "$lib/libswift_Concurrency.dylib" ] && cp "$lib/libswift_Concurrency.dylib" "$app/Contents/Frameworks/" && break
+  [ $lib = none ] && echo "  Swift's back-deployed concurrency library not found: this build needs macOS 12 or later"
+done
 cp macos/Info.plist "$app/Contents/"
 cp macos/AppIcon.icns "$app/Contents/Resources/"
 echo "→ Minifying the page"
@@ -28,6 +35,7 @@ if [ -n "$identity" ]; then
   echo "→ Signing with $identity"
   # Inner executable first, then the bundle; hardened runtime is required for notarization
   codesign --force --options runtime --timestamp --sign "$identity" "$app/Contents/MacOS/evict-scan"
+  find "$app/Contents/Frameworks" -name '*.dylib' -exec codesign --force --options runtime --timestamp --sign "$identity" {} +
   codesign --force --options runtime --timestamp --sign "$identity" "$app"
 else
   echo "→ No Developer ID certificate: ad-hoc signature"

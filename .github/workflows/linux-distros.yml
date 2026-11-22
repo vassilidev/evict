@@ -26,12 +26,15 @@ jobs:
       matrix:
         arch: [x86_64, aarch64]
         distro:
+          - {image: 'ubuntu:20.04', ext: deb}
           - {image: 'ubuntu:22.04', ext: deb}
           - {image: 'ubuntu:24.04', ext: deb}
           - {image: 'ubuntu:24.04', ext: tar.gz}
           - {image: 'ubuntu:26.04', ext: deb}
+          - {image: 'debian:11', ext: deb}
           - {image: 'debian:12', ext: deb}
           - {image: 'debian:13', ext: deb}
+          - {image: 'linuxmintd/mint20-amd64', ext: deb}
           - {image: 'linuxmintd/mint21-amd64', ext: deb}
           - {image: 'linuxmintd/mint22-amd64', ext: deb}
           - {image: 'kalilinux/kali-rolling', ext: deb}
@@ -41,11 +44,14 @@ jobs:
           - {image: 'opensuse/tumbleweed', ext: rpm}
           - {image: 'opensuse/leap:15.6', ext: rpm}
           - {image: 'opensuse/leap:16.0', ext: rpm}
+          - {image: 'almalinux:9', ext: rpm}
           - {image: 'almalinux:10', ext: rpm}
+          - {image: 'rockylinux/rockylinux:9', ext: rpm}
           - {image: 'rockylinux/rockylinux:10', ext: rpm}
           - {image: 'archlinux:latest', ext: pkg.tar.zst}
           - {image: 'manjarolinux/base', ext: pkg.tar.zst}
         exclude:  # images only published for x86_64
+          - {arch: aarch64, distro: {image: 'linuxmintd/mint20-amd64', ext: deb}}
           - {arch: aarch64, distro: {image: 'linuxmintd/mint21-amd64', ext: deb}}
           - {arch: aarch64, distro: {image: 'linuxmintd/mint22-amd64', ext: deb}}
           - {arch: aarch64, distro: {image: 'archlinux:latest', ext: pkg.tar.zst}}

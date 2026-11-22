@@ -22,9 +22,7 @@ struct EvictApp: App {
                     if model.state == .idle { model.start() }
                     model.watchForUpdates()
                 }
-                // A compact toolbar in the page's color, so the window reads as one surface
-                .toolbarBackground(Color(red: 0.047, green: 0.055, blue: 0.071), for: .windowToolbar)
-                .toolbarBackground(.visible, for: .windowToolbar)
+                .pageColoredToolbar()
         }
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
@@ -60,7 +58,7 @@ final class Model: ObservableObject {
         Task {
             while true {
                 await checkForUpdates(manual: false)
-                try? await Task.sleep(for: .seconds(6 * 3600))
+                try? await Task.sleep(nanoseconds: 6 * 3600 * 1_000_000_000)
             }
         }
     }
@@ -140,7 +138,23 @@ final class Model: ObservableObject {
     // Without Full Disk Access, every protected folder (Desktop, Documents, other apps' data…)
     // makes macOS pop a consent dialog and the scan waits on it, so ask for the access first
     func start() {
-        if hasFullDiskAccess { scan() } else { state = .needsAccess }
+        if hasFullDiskAccess { scan() } else { state = .needsAccess; warmSystemCache() }
+    }
+
+    // While the user grants access, the scanner walks the sealed system folders (no permission needed there)
+    // and keeps their sizes, so the first scan already skips them
+    private func warmSystemCache() {
+        guard let scanner = Bundle.main.url(forAuxiliaryExecutable: "evict-scan") else { return }
+        Task.detached(priority: .utility) {
+            for folder in ["/System", "/usr"] {
+                let process = Process()
+                process.executableURL = scanner
+                process.arguments = [folder]
+                process.standardOutput = FileHandle.nullDevice
+                process.standardError = FileHandle.nullDevice
+                if (try? process.run()) != nil { process.waitUntilExit() }
+            }
+        }
     }
 
     func scan() {
@@ -403,20 +417,18 @@ final class Model: ObservableObject {
         running = process
         Task {
             var done = false, problem = ""
-            do {
-                for try await line in out.fileHandleForReading.bytes.lines {
-                    guard let event = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] else {
-                        problem += line + "\n"
-                        continue
-                    }
-                    if let delta = ((event["event"] as? [String: Any])?["delta"] as? [String: Any])?["text"] as? String {
-                        answer(id, delta, "delta")
-                    } else if event["type"] as? String == "result" {
-                        done = event["is_error"] as? Bool != true
-                        if !done { problem += event["result"] as? String ?? "" }
-                    }
+            for await line in lines(of: out.fileHandleForReading) {
+                guard let event = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String: Any] else {
+                    problem += line + "\n"
+                    continue
                 }
-            } catch {}
+                if let delta = ((event["event"] as? [String: Any])?["delta"] as? [String: Any])?["text"] as? String {
+                    answer(id, delta, "delta")
+                } else if event["type"] as? String == "result" {
+                    done = event["is_error"] as? Bool != true
+                    if !done { problem += event["result"] as? String ?? "" }
+                }
+            }
             if running === process { running = nil }
             answer(id, problem, done ? "done" : "error")
         }
@@ -440,15 +452,13 @@ final class Model: ObservableObject {
         running = process
         Task {
             var files: [(String, Int64)] = [], total: Int64 = 0
-            do {
-                for try await line in out.fileHandleForReading.bytes.lines {
-                    // mode, links, owner, group, size, month, day, time or year, name
-                    let field = line.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: true)
-                    guard field.count == 9, !field[0].hasPrefix("d"), let size = Int64(field[4]) else { continue }
-                    files.append((String(field[8]), size))
-                    total += size
-                }
-            } catch {}
+            for await line in lines(of: out.fileHandleForReading) {
+                // mode, links, owner, group, size, month, day, time or year, name
+                let field = line.split(separator: " ", maxSplits: 8, omittingEmptySubsequences: true)
+                guard field.count == 9, !field[0].hasPrefix("d"), let size = Int64(field[4]) else { continue }
+                files.append((String(field[8]), size))
+                total += size
+            }
             if running === process { running = nil }
             try? err.close()
             let log = (try? String(contentsOf: errURL, encoding: .utf8)) ?? ""
@@ -554,7 +564,7 @@ struct ContentView: View {
             case .failed(let message):
                 VStack(spacing: 12) {
                     Text("The scan failed").font(.title2.weight(.semibold))
-                    Text(message).foregroundStyle(.secondary)
+                    Text(message).foregroundColor(.secondary)
                     Button("Try Again") { model.scan() }
                 }
             default:
@@ -569,8 +579,7 @@ struct ContentView: View {
                 if model.updating {
                     ProgressView().controlSize(.small).help("Updating…")
                 } else if let update = model.update {
-                    Button { model.promptUpdate() } label: { Label("Update to \(update.version)", systemImage: "arrow.down.circle") }
-                        .labelStyle(.titleAndIcon)
+                    Button { model.promptUpdate() } label: { HStack { Image(systemName: "arrow.down.circle"); Text("Update to \(update.version)") } }
                         .help("Evict \(update.version) is available")
                 }
             }
@@ -591,7 +600,7 @@ struct AccessView: View {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
             Text("Give Evict Full Disk Access").font(.title.weight(.semibold))
             Text("Without it, macOS interrupts the scan with a series of permission prompts (Desktop, Documents, other apps’ data…) and part of the disk stays invisible.")
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Text("1.  Open System Settings with the button below")
@@ -601,7 +610,6 @@ struct AccessView: View {
             .font(.callout)
             HStack {
                 Button("Open System Settings") { model.openFullDiskAccess() }
-                    .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                 Button("Scan Anyway") { model.scan() }
             }
@@ -610,10 +618,12 @@ struct AccessView: View {
         }
         .frame(maxWidth: 520)
         .padding(40)
-        .task {
-            while model.state == .needsAccess {
-                try? await Task.sleep(for: .seconds(1))
-                if model.state == .needsAccess && model.hasFullDiskAccess { model.scan() }
+        .onAppear {
+            Task {
+                while model.state == .needsAccess {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    if model.state == .needsAccess && model.hasFullDiskAccess { model.scan() }
+                }
             }
         }
     }
@@ -629,7 +639,7 @@ struct ScanningView: View {
             if !model.hasFullDiskAccess {
                 VStack(spacing: 8) {
                     Text("Without Full Disk Access, Mail, Messages and Safari aren’t counted.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.callout).foregroundColor(.secondary)
                     Button("Open System Settings") { model.openFullDiskAccess() }
                 }
                 .padding(.top, 18)
@@ -781,7 +791,14 @@ enum Updater {
     // Copies the app out of the downloaded DMG next to the running one, then swaps them atomically
     static func install(_ release: Release, over app: URL = Bundle.main.bundleURL) async throws {
         guard let url = release.dmg else { throw failure("Version \(release.version) has no DMG.") }
-        let (dmg, _) = try await URLSession.shared.download(from: url)
+        // A completion handler rather than async download(from:), which needs macOS 12
+        let dmg: URL = try await withCheckedThrowingContinuation { done in
+            URLSession.shared.downloadTask(with: url) { file, _, error in
+                guard let file else { return done.resume(throwing: error ?? failure("The download failed.")) }
+                let kept = FileManager.default.temporaryDirectory.appendingPathComponent("Evict-\(UUID().uuidString).dmg")
+                do { try FileManager.default.moveItem(at: file, to: kept); done.resume(returning: kept) } catch { done.resume(throwing: error) }
+            }.resume()
+        }
         let mount = FileManager.default.temporaryDirectory.appendingPathComponent("evict-update-\(UUID().uuidString)")
         try run("/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mount.path, dmg.path)
         defer {
@@ -838,5 +855,36 @@ enum Updater {
 
     private static func failure(_ message: String) -> NSError {
         NSError(domain: "Evict", code: 3, userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+// A compact toolbar in the page's color, so the window reads as one surface (macOS 13+; older versions keep theirs)
+extension View {
+    @ViewBuilder func pageColoredToolbar() -> some View {
+        if #available(macOS 13, *) {
+            toolbarBackground(Color(red: 0.047, green: 0.055, blue: 0.071), for: .windowToolbar).toolbarBackground(.visible, for: .windowToolbar)
+        } else {
+            self
+        }
+    }
+}
+
+// A pipe's lines as they come (FileHandle.bytes.lines needs macOS 12)
+func lines(of handle: FileHandle) -> AsyncStream<String> {
+    AsyncStream { stream in
+        var buffer = Data()
+        handle.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if chunk.isEmpty {
+                handle.readabilityHandler = nil
+                if !buffer.isEmpty { stream.yield(String(decoding: buffer, as: UTF8.self)) }
+                return stream.finish()
+            }
+            buffer.append(chunk)
+            while let end = buffer.firstIndex(of: 10) {
+                stream.yield(String(decoding: buffer.subdata(in: buffer.startIndex..<end), as: UTF8.self))
+                buffer = buffer.subdata(in: (end + 1)..<buffer.endIndex)
+            }
+        }
     }
 }

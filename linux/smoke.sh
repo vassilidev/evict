@@ -16,6 +16,8 @@ alive() { grep -qx "$1" /proc/[0-9]*/comm 2> /dev/null; }
 # A virtual display, a session bus and curl; package names differ by family
 if command -v apt-get > /dev/null; then
   export DEBIAN_FRONTEND=noninteractive
+  # Debian 11 is past its end of life: its security updates moved to archive.debian.org
+  grep -qs bullseye /etc/os-release && sed -i 's|http://deb.debian.org/debian-security|http://archive.debian.org/debian-security|' /etc/apt/sources.list
   quiet apt-get update -qq
   quiet apt-get install -y -qq xvfb dbus curl ca-certificates
   # The tarball doesn't bring WebKitGTK: install it the way such a user would
