@@ -25,16 +25,16 @@
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-8b93a1">
 </p>
 
-![Evict's home page: the disk by kind of file, cleanup shortcuts, where the space is, the largest files and the regenerable folders](docs/home.png)
+![Evict's map: every folder of the disk as a box sized by the space it takes, colored by kind of file](docs/screenshot.png)
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/screenshot.png" alt="The map: every folder as a box sized by the space it takes"></td>
+    <td width="33%"><img src="docs/list.png" alt="The list: folders sorted by size, each row drawn over a bar of its size"></td>
     <td width="33%"><img src="docs/search.png" alt="Search: video files as cards with their size, some selected"></td>
     <td width="33%"><img src="docs/duplicates.png" alt="Duplicates: sets of identical files with the copy to keep"></td>
   </tr>
   <tr>
-    <td align="center"><sub>The map</sub></td>
+    <td align="center"><sub>The list</sub></td>
     <td align="center"><sub>Search (<code>⌘K</code>)</sub></td>
     <td align="center"><sub>Duplicates</sub></td>
   </tr>
@@ -45,8 +45,7 @@
 
 ### See where the space went
 
-- **A home page**: the disk as one bar split by kind of file, tiles for the Trash, Downloads, regenerable files, duplicates and Claude's quick wins, then where the space is, the largest files and the regenerable folders. Each scan opens on it.
-- **A map**, finviz-style: each box is as big as the space it takes. Click to go inside, use the path bar (with the folder's size) to go back up.
+- **A map**, finviz-style: each box is as big as the space it takes. Click to go inside, use the path bar (with the folder's size) to go back up, click the logo to see the whole disk again.
 - **A list**: the same folder as a tree sorted by size, each row drawn over a bar of its size and color, folders expanded in place.
 - **Colors that tell you something**: 🟥 regenerable (caches, `node_modules`, DerivedData, builds, `.venv`…), 🟧 archives and disk images, 🟪 media, 🟦 apps, 🟩 data, ⬛ system. Click a category to highlight it.
 - **Dependency folders count as one block**: `node_modules`, `vendor`, `.venv`, `Pods`, `site-packages`… are added up without keeping the thousands of folders inside, which halves the report on a developer's disk.
@@ -127,7 +126,8 @@ In the browser, a web page can't delete files, drive Finder or run Claude Code, 
 | Click a folder | Drill into it (map) · expand it in place (list) |
 | Double-click a folder (list) | Drill into it |
 | Click a file · right-click · `⋯` | Menu: open, show in Finder, copy path, ask AI, hide, delete |
-| **Home** / **Map** / **List** | Switch views (each scan opens on Home) |
+| **Map** / **List** | Switch views (remembered) |
+| Click the logo | Back to the whole disk, on the map |
 | `⌘K`, `⌘F` or `/` | Search palette · `Esc` closes |
 | Checkbox · `⌘`-click · `Shift`-click · `⌘A` | Select · add to the selection · select a range · select every row shown |
 | `Esc` with a selection | Clear the selection |
@@ -181,6 +181,14 @@ Every push runs the [CI](.github/workflows/ci.yml): scanner test, universal buil
 # bump CFBundleShortVersionString in app/Info.plist, commit, then:
 git tag v1.10.0 && git push origin v1.10.0
 ```
+
+## FAQ
+
+**Can Evict delete something by mistake?** It never deletes on its own: everything goes through a confirmation that lists what will go, with the Trash as the default. The disk root, your home folder, `~/Library`, macOS system folders, keychains and folders like `~/.ssh` can't be deleted, and Evict warns you about the `.env` files and keys inside a folder before it goes.
+
+**Does Evict send my files anywhere?** No. The scan stays on your Mac; the only request is the update check against GitHub. **Ask Claude** and **Quick wins** are optional and send names and sizes from the scan, never file contents, through your own Claude Code.
+
+**Why Full Disk Access?** Without it, macOS hides part of the disk (Mail, Messages, other apps' data) and interrupts the scan with a prompt per protected folder. You can still scan without it.
 
 ## Known limitations
 
