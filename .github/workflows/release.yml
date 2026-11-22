@@ -1,7 +1,9 @@
 name: Release
 
-# Push a tag like v1.2.0 (matching CFBundleShortVersionString in app/Info.plist) to publish a release.
+# Push a tag like v1.2.0 (matching CFBundleShortVersionString in macos/Info.plist) to publish a release.
 # With the signing secrets set, the DMG is signed with Developer ID and notarized by Apple.
+# The Linux packages are published as soon as they're built; Apple's notarization can take hours, so the release only
+# becomes "latest" (what the macOS updater and download links use) once its DMG is attached.
 on:
   push:
     tags: ['v*']
@@ -20,7 +22,7 @@ jobs:
 
       - name: Tag matches the app version
         run: |
-          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' app/Info.plist)
+          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' macos/Info.plist)
           test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME doesn't match app version $version"; exit 1; }
 
       - name: Scanner matches du
@@ -66,8 +68,58 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" .build/Evict.dmg --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" .build/Evict.dmg --title "Evict ${GITHUB_REF_NAME#v}" --generate-notes
-          fi
+          tag=$GITHUB_REF_NAME
+          gh release create "$tag" .build/Evict.dmg --title "Evict ${tag#v}" --generate-notes --latest=false \
+            || gh release upload "$tag" .build/Evict.dmg --clobber
+          # An older tag finishing late must not take "latest" back
+          newest=$(gh api "repos/$GITHUB_REPOSITORY/tags?per_page=100" --jq '.[].name' | grep '^v' | sort -V | tail -n 1)
+          if [ "$newest" = "$tag" ]; then gh release edit "$tag" --latest; fi
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    strategy:
+      matrix:
+        arch: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches the app version
+        run: |
+          version=$(sed -n '/CFBundleShortVersionString/{n;s/.*<string>\(.*\)<\/string>.*/\1/p;}' macos/Info.plist)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME doesn't match app version $version"; exit 1; }
+
+      - name: Scanner matches du
+        run: ./test.sh
+
+      - name: Build the app and packages (Ubuntu 22.04 container, the oldest glibc supported)
+        run: linux/package.sh
+
+      - name: Install and run on Ubuntu 24.04
+        run: docker run --rm -v "$PWD:/src:ro" -w /src ubuntu:24.04 sh linux/smoke.sh ".build/evict-linux-${{ matrix.arch }}.deb"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evict-linux-${{ matrix.arch }}
+          path: .build/evict-linux-*
+
+  publish-linux:
+    name: Publish the Linux packages
+    needs: linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: evict-linux-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag=$GITHUB_REF_NAME
+          ls -l dist
+          gh release create "$tag" dist/* --title "Evict ${tag#v}" --generate-notes --latest=false \
+            || gh release upload "$tag" dist/* --clobber

@@ -1,0 +1,41 @@
+# .deb, .rpm and Arch packages, made by linux/build.sh with nfpm (https://nfpm.goreleaser.com)
+name: evict
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: vassilidev <vassilidev@users.noreply.github.com>
+description: |
+  The bouncer for your disk: a fast disk usage analyzer.
+  Evict reads the whole disk in seconds and shows where every gigabyte went
+  (map, list, search, duplicates, caches), then helps you clean up safely.
+vendor: vassilidev
+homepage: https://vassilidev.github.io/evict/
+license: MIT
+overrides:
+  deb:
+    depends: [libwebkit2gtk-4.1-0, curl]
+    recommends: [libarchive-tools]
+  rpm:
+    # by soname, so Fedora (webkit2gtk4.1) and openSUSE (libwebkit2gtk-4_1-0) both resolve it
+    depends: ["libwebkit2gtk-4.1.so.0()(64bit)", curl]
+    recommends: [bsdtar]
+  archlinux:
+    depends: [webkit2gtk-4.1, curl]
+contents:
+  - src: .build/linux/evict/evict
+    dst: /usr/lib/evict/evict
+  - src: .build/linux/evict/evict-scan
+    dst: /usr/lib/evict/evict-scan
+  - src: .build/linux/evict/index.html
+    dst: /usr/lib/evict/index.html
+  - src: /usr/lib/evict/evict
+    dst: /usr/bin/evict
+    type: symlink
+  - src: linux/com.vassilidev.evict.desktop
+    dst: /usr/share/applications/com.vassilidev.evict.desktop
+  - src: linux/com.vassilidev.evict.png
+    dst: /usr/share/icons/hicolor/512x512/apps/com.vassilidev.evict.png
+  - src: linux/com.vassilidev.evict.policy
+    dst: /usr/share/polkit-1/actions/com.vassilidev.evict.policy

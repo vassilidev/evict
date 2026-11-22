@@ -1,0 +1,56 @@
+<!doctype html>
+<!-- Source of macos/dmg-background.tiff, the DMG window's background (720×440). The icons sit at (190, 214) and
+     (530, 214), see build.sh; the light tags sit under their labels. Render with macos/dmg-background.sh -->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+html,body{margin:0;width:720px;height:440px;overflow:hidden}
+body{position:relative;background:#0b0d11;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif;color:#eef0f4;-webkit-font-smoothing:antialiased}
+#map{position:absolute;inset:0;-webkit-mask-image:radial-gradient(ellipse 74% 70% at 50% 50%,transparent 50%,#000 100%)}
+#map i{position:absolute;border-radius:4px;opacity:.13}
+header{position:absolute;top:40px;left:0;right:0;text-align:center}
+.brand{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:600;color:#c9ced8}
+.brand svg{width:16px;height:16px}
+h1{margin:12px 0 0;font-size:19px;font-weight:600;letter-spacing:-.01em}
+.arrow{position:absolute;left:300px;top:204px;width:120px;height:20px}
+/* Finder always draws icon labels in black over a background picture: light tags sit right under them */
+.tag{position:absolute;top:286px;height:22px;border-radius:7px;background:#e4e7ed;transform:translateX(-50%)}
+.hint{position:absolute;bottom:44px;left:0;right:0;text-align:center;font-size:12px;color:#7a8292}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<header>
+  <div class="brand"><svg viewBox="0 0 20 20" aria-hidden="true"><rect width="11" height="20" rx="2.5" fill="#e0473d"/><rect x="12" width="8" height="12" rx="2.5" fill="#e0921f"/><rect x="12" y="13" width="8" height="7" rx="2.5" fill="#3d7fe6"/></svg>Evict</div>
+  <h1>Drag Evict to your Applications folder</h1>
+</header>
+<svg class="arrow" viewBox="0 0 120 20" fill="none" stroke="#8b93a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4 10h108M104 3l8 7-8 7"/>
+</svg>
+<div class="tag" style="left:190px;width:62px"></div>
+<div class="tag" style="left:530px;width:102px"></div>
+<p class="hint">Then open Evict from Applications and allow Full Disk Access when it asks.</p>
+<script>
+// A treemap like the app's own map, laid out once with fixed sizes so every render is identical
+const colors = ['#e0473d', '#e0921f', '#9061f0', '#3d7fe6', '#2ea36b', '#5f6675'];
+const sizes = [30, 22, 18, 15, 13, 11, 10, 9, 8, 7, 7, 6, 6, 5, 5, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 1.5, 1.5, 1.5, 1.5, 1, 1, 1, 1, 1, 1];
+const map = document.getElementById('map');
+function lay(items, x, y, w, h) {
+  if (items.length === 1) {
+    const r = document.createElement('i'), g = 3;
+    Object.assign(r.style, {left: x + g / 2 + 'px', top: y + g / 2 + 'px', width: Math.max(0, w - g) + 'px', height: Math.max(0, h - g) + 'px', background: colors[items[0].c]});
+    return map.append(r);
+  }
+  const total = items.reduce((s, it) => s + it.v, 0);
+  let acc = 0, cut = 0;
+  while (cut < items.length - 1 && acc + items[cut].v <= total / 2) acc += items[cut++].v;
+  if (!cut) acc += items[cut++].v;
+  const a = items.slice(0, cut), b = items.slice(cut), f = acc / total;
+  if (w >= h) { lay(a, x, y, w * f, h); lay(b, x + w * f, y, w * (1 - f), h) }
+  else { lay(a, x, y, w, h * f); lay(b, x, y + h * f, w, h * (1 - f)) }
+}
+lay(sizes.map((v, i) => ({v, c: (i * 7 + (i >> 2)) % colors.length})), 0, 0, 720, 440);
+</script>
+</body>
+</html>

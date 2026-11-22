@@ -276,7 +276,7 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 window.DATA = null; /* __DATA__ */
 </script>
 <script>
-const D = window.DATA, $ = id => document.getElementById(id);
+const D = window.DATA, $ = id => document.getElementById(id), LINUX = (D || window.LIVE)?.os === 'linux', DISK = LINUX ? 'Computer' : 'Macintosh HD';
 if (!D && !window.LIVE) document.body.innerHTML = '<p id="empty">No data: run <code>./evict</code> to scan the disk and generate this page.</p>';
 
 const CATS = {
@@ -292,7 +292,9 @@ const CATS = {
 const JUNK = /^(node_modules|site-packages|bower_components|\.tox|\.bundle|\.cargo|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
 const ARCH = /\.(zip|dmg|iso|pkg|tar|gz|tgz|bz2|xz|7z|rar|xip|raw|img|qcow2|vmdk|vdi|ipsw|sparseimage|sparsebundle|bak)$/i;
 const MEDIA = /\.(mov|mp4|m4v|mkv|avi|webm|jpe?g|png|heic|gif|tiff?|psd|cr2|nef|arw|dng|mp3|wav|aiff?|flac|m4a|aac|photoslibrary|fcpbundle|imovielibrary|logicx|band)$/i;
-const SYS = /^\/(System|private|usr|bin|sbin|cores)(\/|$)/;
+const SYS = /^\/(System|private|usr|bin|sbin|cores|proc|sys|dev|run|boot|etc|lib|lib32|lib64|libx32|snap)(\/|$)/;
+// Home folders: /Users/name on macOS, /home/name and /root on Linux
+const HOME = String.raw`(?:\/(?:Users|home)\/[^/]+|\/root)`;
 
 const nf = (v, d) => new Intl.NumberFormat('en-US', {maximumFractionDigits: d}).format(v);
 const fmt = b => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (b >= 1000 && i < 4) { b /= 1000; i++ } return nf(b, i && b < 10 ? 1 : 0) + ' ' + u[i] };
@@ -300,9 +302,10 @@ const isDir = n => n[0] !== null && Array.isArray(n[2]);
 const join = (p, name) => p === '/' ? '/' + name : p + '/' + name;
 const kidPath = (p, k) => k[0] === null || k.cat ? null : join(p, k[0]);
 const quote = p => "'" + p.replace(/'/g, "'\\''") + "'";
-// Never offer rm on the disk root, top-level folders, home folders, macOS system paths or where keys and passwords live
-const SECRETS = /^\/Users\/[^/]+\/(\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.password-store|\.config\/gcloud|Library\/Keychains)(\/|$)/;
-const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !SECRETS.test(p) && !/^\/Users\/[^/]+(\/Library|\/\.Trash)?$/.test(p);
+// Never offer rm on the disk root, top-level folders, home folders, system paths or where keys and passwords live
+const SECRETS = new RegExp(String.raw`^${HOME}\/(\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.password-store|\.config\/gcloud|Library\/Keychains|\.local\/share\/keyrings)(\/|$)`);
+const HOMES = new RegExp(String.raw`^${HOME}(\/Library|\/\.Trash|\/\.config|\/\.local|\/\.local\/share|\/\.local\/share\/Trash(\/files)?)?$`);
+const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !SECRETS.test(p) && !HOMES.test(p);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
 const label = n => n[0] ?? `${nf(n[2], 0)} other items`;
 const extOf = name => (name.match(/^.+\.([^.\s]+)$/)?.[1] || '').toLowerCase();
@@ -366,7 +369,7 @@ function catOf(n, p) {
   if (n[0] === null) return 'misc';
   if (SYS.test(p)) return 'sys';
   if (JUNK.test(n[0])) return 'junk';
-  if (/\.app$/i.test(n[0])) return 'app';
+  if (/\.(app|appimage)$/i.test(n[0]) || LINUX && /^\/(opt|var\/lib\/(flatpak|snapd))\//.test(p)) return 'app';
   if (ARCH.test(n[0])) return 'arch';
   if (MEDIA.test(n[0])) return 'media';
   return isDir(n) ? null : 'data';
@@ -405,7 +408,7 @@ function live() {
   const base = window.LIVE.root, frame = el('div', 'frame'), info = el('div', 'stage-info', 'Starting…'), stage = el('div', 'stage');
   const colors = ['junk', 'arch', 'media', 'app', 'data', 'sys', 'misc'].map(c => CATS[c][1]), cycle = 2600;
   document.body.classList.add('live');
-  $('crumbs').textContent = base === '/' ? 'Scanning Macintosh HD…' : `Scanning ${base}…`;
+  $('crumbs').textContent = base === '/' ? `Scanning ${DISK}…` : `Scanning ${base}…`;
   stage.append(frame, info);
   $('map').append(stage);
   function build() {
@@ -436,8 +439,14 @@ if (!D && window.LIVE) live();
 
 if (D) {
   const root = D.tree, isDisk = root[0] === '/';
-  // Inside the macOS app, deletion and clipboard go through the native bridge
+  // Inside the app (macOS or Linux), deletion and clipboard go through the native bridge
   const app = window.webkit?.messageHandlers?.evict;
+  const SHOW = LINUX ? 'Show in folder' : 'Show in Finder', SYSTEM = LINUX ? 'Linux' : 'macOS', MACHINE = LINUX ? 'Linux computer' : 'Mac';
+  if (LINUX) {
+    for (const k of document.querySelectorAll('kbd')) k.textContent = k.textContent.replace('⌘', 'Ctrl+').replace(/\+$/, '');
+    for (const e of document.querySelectorAll('.pal-keys span, #sel-finder')) e.lastChild.textContent = e.lastChild.textContent.replace('Show in Finder', SHOW);
+    $('search').title = 'Search (Ctrl+K)';
+  }
   const stats = () => {
     $('stats').textContent = (isDisk ? `${fmt(D.total - D.free)} used · ${fmt(D.free)} free · ` : `${fmt(root[1])} · `)
       + `${nf(D.count, 0)} items in ${nf(D.secs, 1)} s`;
@@ -521,7 +530,7 @@ if (D) {
     toast(msg);
   }
   const copyPath = p => copy(p, 'Path copied');
-  const reveal = p => app ? app.postMessage({action: 'reveal', path: p}) : copy('open -R ' + quote(p), 'Command copied: paste it in Terminal');
+  const reveal = p => app ? app.postMessage({action: 'reveal', path: p}) : copy(LINUX ? 'xdg-open ' + quote(p.slice(0, p.lastIndexOf('/')) || '/') : 'open -R ' + quote(p), 'Command copied: paste it in Terminal');
   const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'rm command copied');
 
   // Ask AI: in the app, prompts run through the local Claude Code CLI and stream into a side panel; otherwise they're copied for any AI chat
@@ -532,13 +541,13 @@ if (D) {
   const rules = `Only advise: don't delete anything and don't run any command. Answer in ${langName}, in Markdown, and write every path in backticks.`;
 
   function itemPrompt(n, p, v) {
-    let text = `I'm freeing up disk space on my Mac. What is this ${isDir(n) ? 'folder' : 'file'}?\n\nPath: ${tilde(p)} (~ is my home folder)\nSize on disk: ${fmt(v)}\n`;
+    let text = `I'm freeing up disk space on my ${MACHINE}. What is this ${isDir(n) ? 'folder' : 'file'}?\n\nPath: ${tilde(p)} (~ is my home folder)\nSize on disk: ${fmt(v)}\n`;
     if (isDir(n)) text += 'Largest items inside:\n' + [...n[2]].sort((a, b) => b[1] - a[1]).slice(0, 10)
       .map(k => `- ${label(k)}${isDir(k) ? '/' : ''}: ${fmt(k[1])}`).join('\n') + '\n';
     return text + `
 Answer briefly, in this shape:
 - First line, in bold: a verdict, exactly one of "✅ Safe to delete", "⚠️ Delete with care" or "⛔ Keep it", then a short reason.
-- "### What it is": what it is, and which app, tool or part of macOS creates it.
+- "### What it is": what it is, and which app, tool or part of ${SYSTEM} creates it.
 - "### If you delete it": what happens (lost data or settings, re-downloaded, rebuilt automatically…) and whether it grows back.
 - "### How to clean it": the cleanest way, the app's own setting or cleanup command first.
 
@@ -568,7 +577,7 @@ ${rules}`;
     tree(root, root[0], 0);
     walk(root, root[0], false);
     const list = (a, max) => a.sort((x, y) => y[1] - x[1]).slice(0, max).map(([p, v, c]) => `- ${tilde(p)}: ${fmt(v)}${c && c !== 'data' ? ` (${CATS[c][0].toLowerCase()})` : ''}`).join('\n') || '- none';
-    return `I'm freeing up disk space on my Mac. Here is a summary of a full scan made with Evict (real sizes on disk, ~ is my home folder${masked.size ? ', folders I chose to hide are left out' : ''}).
+    return `I'm freeing up disk space on my ${MACHINE}. Here is a summary of a full scan made with Evict (real sizes on disk, ~ is my home folder${masked.size ? ', folders I chose to hide are left out' : ''}).
 
 ${isDisk ? `Disk: ${fmt(D.total)}, ${fmt(used)} used, ${fmt(D.free)} free.` : `Scanned folder: ${tilde(root[0])}, ${fmt(used)}.`}
 
@@ -583,7 +592,7 @@ ${list(files, 20)}
 
 Give me a short, personal cleanup plan:
 1. Start with one bold line: how much space the safe quick wins free in total.
-2. "## Quick wins": the safest, biggest gains first, at most 6. For each: a "### " heading with what it is and its size, the path, then one line on what I lose and one line on how to clean it properly (the app's own setting or cleanup command first, e.g. Docker, Xcode, simulators, Homebrew, npm; otherwise move it to the Trash).
+2. "## Quick wins": the safest, biggest gains first, at most 6. For each: a "### " heading with what it is and its size, the path, then one line on what I lose and one line on how to clean it properly (the app's own setting or cleanup command first, e.g. ${LINUX ? 'Docker, the package manager cache, journald, Flatpak, snap, npm' : 'Docker, Xcode, simulators, Homebrew, npm'}; otherwise move it to the Trash).
 3. "## Worth a look": at most 6 lines, what needs my judgment (old downloads, disk images, videos, virtual machines).
 4. "## Leave alone": at most 4 lines, what looks big but shouldn't be deleted.
 Be concise. Only cite paths from this scan, written exactly as above.
@@ -635,7 +644,7 @@ ${rules}`;
     b.innerHTML = md(answer);
     if (follow) b.scrollTop = b.scrollHeight;
   }
-  // Called by the macOS app: kind is "delta" (a piece of the answer), "done" or "error"
+  // Called by the app: kind is "delta" (a piece of the answer), "done" or "error"
   window.evictAnswer = (id, text, kind) => {
     if (id !== askId || $('ai').hidden) return;
     if (kind === 'delta') { answer += text; $('ai-body').classList.add('live'); paintFrame ||= requestAnimationFrame(paint); return }
@@ -655,8 +664,8 @@ ${rules}`;
 
   // Previews: Quick Look in the app (photos, videos, PDF, Office, text…), archives listed in the side panel
   const previewPaths = paths => app ? app.postMessage({action: 'preview', paths})
-    : copy('qlmanage -p ' + paths.map(quote).join(' ') + ' >/dev/null 2>&1', 'Quick Look command copied: paste it in Terminal');
-  const openFile = p => app ? app.postMessage({action: 'open', path: p}) : copy('open ' + quote(p), 'Command copied: paste it in Terminal');
+    : copy(LINUX ? 'xdg-open ' + quote(paths[0]) : 'qlmanage -p ' + paths.map(quote).join(' ') + ' >/dev/null 2>&1', 'Preview command copied: paste it in Terminal');
+  const openFile = p => app ? app.postMessage({action: 'open', path: p}) : copy((LINUX ? 'xdg-open ' : 'open ') + quote(p), 'Command copied: paste it in Terminal');
   const isArchive = it => !isDir(it.n) && ARCHIVE.test(it.p);
   let archiveSize = 0;
   function showArchive(it) {
@@ -664,7 +673,7 @@ ${rules}`;
     archiveSize = it.v;
     app.postMessage({action: 'archive', id: openPanel('Archive', label(it.n), `${tilde(it.p)} · ${fmt(it.v)}`, 'Reading the archive', 'Reading'), path: it.p});
   }
-  // Called by the macOS app with the archive's files, biggest first
+  // Called by the app with the archive's files, biggest first
   window.evictArchive = (id, res) => {
     if (id !== askId || $('ai').hidden) return;
     clearInterval(timer);
@@ -700,7 +709,7 @@ ${rules}`;
   $('cur-wins').textContent = claude ? '✦ Quick wins' : 'Copy quick wins prompt';
   $('cur-wins').onclick = quickWins;
 
-  // Called by the macOS app with the paths it deleted (freed = true) or moved to the Trash
+  // Called by the app with the paths it deleted (freed = true) or moved to the Trash
   function applyRemoved(path, freed) {
     const cut = path.lastIndexOf('/'), parentPath = path.slice(0, cut) || '/', name = path.slice(cut + 1);
     const s = resolve(parentPath), parent = s.at(-1), k = parent[2].findIndex(n => n[0] === name);
@@ -736,7 +745,7 @@ ${rules}`;
 
   // Places to check on any disk: the Trash, where "Move to Trash" sends things, and every Downloads folder
   const nodeAt = p => { const s = resolve(p); return pathOf(s) === p ? s : null };
-  const trash = () => [D.home + '/.Trash', D.home + '/.local/share/Trash'].map(p => ({p, s: nodeAt(p)})).find(t => t.s);
+  const trash = () => [D.home + '/.Trash', D.home + '/.local/share/Trash/files'].map(p => ({p, s: nodeAt(p)})).find(t => t.s);
   function downloadsList() {
     const out = [];
     const walk = (n, p) => {
@@ -779,7 +788,7 @@ ${rules}`;
     $('places').replaceChildren(...chips);
   }
   const emptyTrash = (p, size) => app ? app.postMessage({action: 'emptyTrash', path: p, size})
-    : copy(`osascript -e 'tell application "Finder" to empty trash'`, 'Command copied: paste it in Terminal');
+    : copy(LINUX ? 'gio trash --empty' : `osascript -e 'tell application "Finder" to empty trash'`, 'Command copied: paste it in Terminal');
 
   function setMask(p, on) {
     on ? masked.add(p) : p ? masked.delete(p) : masked.clear();
@@ -808,7 +817,7 @@ ${rules}`;
     dot.style.background = CATS[it.cat][1];
     meta.append(dot, `${fmt(it.v)} · ${nf(it.v / viewSize * 100, 1)}% · ${CATS[it.cat][0]}`);
     tip.replaceChildren(el('div', 't-name', it.title || label(it.n)), meta);
-    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', (isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions · Space: preview') + (canRm(it.p) ? ' · ⌘-click: select' : '')));
+    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', (isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions · Space: preview') + (canRm(it.p) ? (LINUX ? ' · Ctrl-click: select' : ' · ⌘-click: select') : '')));
     tipW = tip.offsetWidth; tipH = tip.offsetHeight;
     tip.classList.add('on');
   }
@@ -839,7 +848,7 @@ ${rules}`;
     if (isDir(it.n)) items.push(menuItem('Open', () => go(it.p)));
     else items.push(isArchive(it) ? menuItem('Show contents', () => showArchive(it)) : menuItem('Preview', () => previewPaths([it.p])), menuItem('Open with default app', () => openFile(it.p)));
     if (selectable(it)) items.push(menuItem(selected.has(it.p) ? 'Deselect' : 'Select', () => { pick(it); syncSel() }));
-    items.push(menuItem('Show in Finder', () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem(claude ? '✦ Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(it.n, it.p, it.v)), menuItem('Hide', () => setMask(it.p, true)), el('hr'));
+    items.push(menuItem(SHOW, () => reveal(it.p)), menuItem('Copy path', () => copyPath(it.p)), menuItem(claude ? '✦ Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(it.n, it.p, it.v)), menuItem('Hide', () => setMask(it.p, true)), el('hr'));
     items.push(canRm(it.p) ? menuItem(app ? 'Delete…' : 'Copy rm -rf command', () => remove(it.p, it.n[1]), 'danger') : el('div', 'm-note', 'Protected path: deletion disabled'));
     showMenu(label(it.n), fmt(it.v), items, e.clientX - 14, e.clientY - 14);
   }
@@ -1129,7 +1138,7 @@ ${rules}`;
     if (!app || !groups.length) return evictDupes(id, {sets: groups.map(g => g.map(p => [p, -1])), unverified: !app});
     app.postMessage({action: 'dupes', id, groups});
   }
-  // Called by the macOS app with the sets of identical files and each one's private size (-1: unknown)
+  // Called by the app with the sets of identical files and each one's private size (-1: unknown)
   window.evictDupes = (id, res) => {
     if (id !== askId || $('ai').hidden) return;
     clearInterval(timer);
@@ -1206,7 +1215,7 @@ ${rules}`;
   };
   $('sel-preview').onclick = () => previewPaths(picks().map(([p]) => p));
   $('sel-finder').onclick = () => app ? app.postMessage({action: 'reveal', paths: picks().map(([p]) => p)})
-    : copy('open -R ' + picks().map(([p]) => quote(p)).join(' '), 'Command copied: paste it in Terminal');
+    : copy(LINUX ? 'xdg-open ' + quote(picks()[0][0].replace(/\/[^/]*$/, '') || '/') : 'open -R ' + picks().map(([p]) => quote(p)).join(' '), 'Command copied: paste it in Terminal');
   $('sel-rm').textContent = app ? 'Delete…' : 'Copy rm -rf';
   $('sel-rm').onclick = () => {
     const list = picks();
@@ -1220,7 +1229,7 @@ ${rules}`;
     cur = stack.at(-1); curPath = pathOf(stack);
     viewSize = total(cur, curPath) + (stack.length === 1 ? extra.reduce((s, e) => s + e[1], 0) : 0);
     $('crumbs').replaceChildren(...stack.flatMap((n, i) => {
-      const a = el('a', '', i ? n[0] : (isDisk ? 'Macintosh HD' : root[0]));
+      const a = el('a', '', i ? n[0] : (isDisk ? DISK : root[0]));
       a.href = '#' + encodeURIComponent(pathOf(stack.slice(0, i + 1)));
       return i ? [el('i', '', '›'), a] : [a];
     }), el('span', 'here', fmt(total(cur, curPath))));
@@ -1308,11 +1317,11 @@ ${rules}`;
     render(true);
   };
   $('cur-more').onclick = e => {
-    const r = e.currentTarget.getBoundingClientRect(), items = [menuItem('Show in Finder', () => reveal(curPath)), menuItem('Copy path', () => copyPath(curPath))];
+    const r = e.currentTarget.getBoundingClientRect(), items = [menuItem(SHOW, () => reveal(curPath)), menuItem('Copy path', () => copyPath(curPath))];
     if (stack.length > 1) items.push(menuItem(claude ? '✦ Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(cur, curPath, total(cur, curPath))));
     if (trash()?.p === curPath) items.push(el('hr'), menuItem(app ? 'Empty Trash…' : 'Copy empty-trash command', () => emptyTrash(curPath, cur[1]), 'danger'));
     else if (canRm(curPath)) items.push(el('hr'), menuItem(app ? 'Delete this folder…' : 'Copy rm -rf command', () => remove(curPath, cur[1]), 'danger'));
-    showMenu(stack.length > 1 ? cur[0] : isDisk ? 'Macintosh HD' : root[0], fmt(total(cur, curPath)), items, r.left - 14, r.bottom - 6);
+    showMenu(stack.length > 1 ? cur[0] : isDisk ? DISK : root[0], fmt(total(cur, curPath)), items, r.left - 14, r.bottom - 6);
   };
 
   $('masked').onclick = e => {

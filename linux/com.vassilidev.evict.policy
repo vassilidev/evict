@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- "Rescan as Administrator": lets pkexec run Evict's scanner as root with a clear password prompt -->
+<policyconfig>
+  <vendor>Evict</vendor>
+  <vendor_url>https://vassilidev.github.io/evict/</vendor_url>
+  <action id="com.vassilidev.evict.scan">
+    <description>Scan the whole disk</description>
+    <message>Evict needs your password to read the folders only the administrator can see.</message>
+    <icon_name>com.vassilidev.evict</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/evict/evict-scan</annotate>
+  </action>
+</policyconfig>

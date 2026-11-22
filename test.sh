@@ -5,11 +5,11 @@ cd "$(dirname "$0")"
 t=$(mktemp -d)
 trap 'rm -rf "$t"' EXIT
 mkdir -p "$t/f/a/b" "$t/f/c"
-dd if=/dev/urandom of="$t/f/a/big" bs=1m count=3 2>/dev/null
-dd if=/dev/urandom of="$t/f/a/b/small" bs=1k count=10 2>/dev/null
+dd if=/dev/urandom of="$t/f/a/big" bs=1048576 count=3 2>/dev/null
+dd if=/dev/urandom of="$t/f/a/b/small" bs=1024 count=10 2>/dev/null
 ln "$t/f/a/big" "$t/f/c/hardlink"
 echo hi > "$t/f/c/tiny"
-cc -O2 -Wall -Wextra -Werror -o "$t/scan" scan.c
+cc -O2 -pthread -Wall -Wextra -Werror -o "$t/scan" scan.c
 json=$("$t/scan" "$t/f" 2>/dev/null)
 got=$(printf '%s' "$json" | sed -E 's/.*"tree":\["[^"]*",([0-9]+).*/\1/')
 want=$(( $(du -sk "$t/f" | cut -f1) * 1024 ))

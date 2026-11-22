@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Evict
+GenericName=Disk Usage Analyzer
+Comment=See where your disk space went and clean up safely
+Exec=evict
+Icon=com.vassilidev.evict
+Terminal=false
+Categories=System;Utility;Filesystem;GTK;
+Keywords=disk;space;usage;storage;analyzer;cleanup;treemap;duplicates;
+StartupNotify=true
+StartupWMClass=com.vassilidev.evict

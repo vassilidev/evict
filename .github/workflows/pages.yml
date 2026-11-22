@@ -1,0 +1,41 @@
+name: Website
+
+# Publishes docs/ to GitHub Pages with every page minified (inline CSS and JS through esbuild); the repo keeps the readable sources
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'minify.py', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Minify the pages
+        run: |
+          cp -R docs _site
+          for page in docs/*.html; do
+            python3 minify.py "$page" "_site/${page#docs/}"
+            printf '%s: %s → %s bytes\n' "$page" "$(wc -c < "$page")" "$(wc -c < "_site/${page#docs/}")"
+          done
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

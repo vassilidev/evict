@@ -1,7 +1,12 @@
 #!/bin/sh
-# Builds Evict.app from source and installs it in /Applications (or ~/Applications)
+# Builds Evict from source and installs it: in /Applications (or ~/Applications) on macOS, in ~/.local on Linux
 set -e
 cd "$(dirname "$0")"
+if [ "$(uname -s)" = Linux ]; then
+  linux/build.sh package
+  EVICT_FILE=".build/evict-linux-$(uname -m).tar.gz" sh docs/install.sh
+  exit
+fi
 ./build.sh
 
 dest=/Applications
