@@ -102,6 +102,8 @@ jobs:
         with:
           name: evict-linux-${{ matrix.arch }}
           path: .build/evict-linux-*
+          include-hidden-files: true  # .build/ is a hidden folder
+          if-no-files-found: error
 
   publish-linux:
     name: Publish the Linux packages
