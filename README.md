@@ -312,7 +312,7 @@ Before the page loads, the app sets `window.evictClaude` (Claude Code found) and
 
 ```sh
 # bump CFBundleShortVersionString in macos/Info.plist (every build reads its version there), commit, then:
-git tag v1.11.2 && git push origin v1.11.2
+git tag v1.12.0 && git push origin v1.12.0
 ```
 
 ## FAQ
