@@ -9,6 +9,7 @@ Everything Evict does, on macOS, Windows and Linux.
 - **A map**, finviz-style: each box is as big as the space it takes. Click to go inside, use the path bar (with the folder's size) to go back up, click the logo to see the whole disk again.
 - **A list**: the same folder as a tree sorted by size, each row drawn over a bar of its size and color, folders expanded in place.
 - **Colors that tell you something**: 🟥 regenerable (caches, `node_modules`, DerivedData, builds, `.venv`…), 🟧 archives and disk images, 🟪 media, 🟦 apps, 🟩 data, ⬛ system. Click a category to highlight it.
+- **Free space always in view**: a small gauge in the toolbar shows what's left on the disk, green while there's room, orange then red when it runs out, and it grows as you clean up.
 - **Dependency folders count as one block**: `node_modules`, `vendor`, `.venv`, `Pods`, `site-packages`… are added up without keeping the thousands of folders inside, which halves the report on a developer's disk.
 
 ## Find anything in a keystroke

@@ -54,6 +54,12 @@ body.live .bottom,body.live .cats,body.live .top button,body.live #status{displa
 .place{display:flex;align-items:center;gap:6px;color:#c7ccd6}
 .place svg{width:13px;height:13px;flex-shrink:0}
 .place.on{border-color:var(--fg);color:var(--fg)}
+/* Free space, always in view: a small gauge of the disk, green while there's room, then orange and red */
+.free{display:flex;align-items:center;gap:8px;padding:4px 10px;border:1px solid var(--line);border-radius:7px;font-size:12px;color:#c7ccd6;white-space:nowrap;cursor:default}
+.free b{color:var(--fg);font-weight:650}
+.free i{width:46px;height:6px;border-radius:3px;background:#262b35;overflow:hidden}
+.free i::before{content:"";display:block;height:100%;width:var(--used);border-radius:3px;background:var(--level)}
+@media (max-width:900px){.free i{display:none}}
 /* Duplicates panel */
 .d-kinds{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
 .d-kinds button{border-radius:20px;padding:3px 10px;color:var(--mut)}
@@ -785,6 +791,15 @@ ${rules}`;
   }
   function renderPlaces() {
     const chips = [], t = trash();
+    if (D.total > 0) {
+      const used = (D.total - D.free) / D.total, gauge = el('span', 'free'), bar = el('i');
+      bar.style.cssText = `--used:${Math.min(100, used * 100).toFixed(1)}%;--level:${used > .95 ? CATS.junk[1] : used > .85 ? CATS.arch[1] : CATS.data[1]}`;
+      gauge.title = `${fmt(D.total - D.free)} used of ${fmt(D.total)}`;
+      const text = el('span');
+      text.append(el('b', '', fmt(D.free)), ' free');
+      gauge.append(bar, text);
+      chips.push(gauge);
+    }
     if (t) {
       const v = total(t.s.at(-1), t.p);
       chips.push(placeChip('trash', v ? `${TRASH} · ${fmt(v)}` : `${TRASH} · empty`, curPath === t.p || curPath.startsWith(t.p + '/'), () => go(t.p)));
