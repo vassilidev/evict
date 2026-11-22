@@ -192,6 +192,8 @@ body.live .bottom,body.live .cats,body.live .top button,body.live #status{displa
 .ar-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ar-row b{flex-shrink:0;font-weight:600;font-variant-numeric:tabular-nums}
 button.ai{color:#f2a58a;border-color:#4a3129}
+button.update{color:#fff;background:#e0473d;border-color:#e0473d}
+button.update:hover{background:#c73d34;border-color:#c73d34}
 button.ai:hover{border-color:#e08a6b;background:#251a16}
 .md>:first-child{margin-top:0}
 .md p{margin:0 0 10px}
@@ -229,6 +231,8 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
     <button id="search" class="search" title="Search (⌘K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg><span>Search files, folders or .ext</span><kbd>⌘K</kbd></button>
     <button id="dupes">Duplicates</button>
     <button id="cur-wins" class="ai"></button>
+    <button id="app-update" class="update" hidden></button>
+    <button id="app-menu" class="icon" title="Evict" aria-label="Evict menu" hidden>☰</button>
   </div>
   <div class="bottom">
     <div class="seg" id="views"><button data-v="map">Map</button><button data-v="list">List</button></div>
@@ -276,7 +280,9 @@ button.ai:hover{border-color:#e08a6b;background:#251a16}
 window.DATA = null; /* __DATA__ */
 </script>
 <script>
-const D = window.DATA, $ = id => document.getElementById(id), LINUX = (D || window.LIVE)?.os === 'linux', DISK = LINUX ? 'Computer' : 'Macintosh HD';
+const D = window.DATA, $ = id => document.getElementById(id), OS = (D || window.LIVE)?.os, LINUX = OS === 'linux', WIN = OS === 'win';
+// Windows: "/" is every fixed drive, "/C:" one drive alone
+const DISK = WIN ? (!D || D.tree[0] === '/' ? 'This PC' : `Local Disk (${D.tree[0].slice(1)})`) : LINUX ? 'Computer' : 'Macintosh HD', TRASH = WIN ? 'Recycle Bin' : 'Trash';
 if (!D && !window.LIVE) document.body.innerHTML = '<p id="empty">No data: run <code>./evict</code> to scan the disk and generate this page.</p>';
 
 const CATS = {
@@ -289,12 +295,12 @@ const CATS = {
   misc:   ['Small files', '#394050'],
   hidden: ['Invisible', '#2a2e37'],
 };
-const JUNK = /^(node_modules|site-packages|bower_components|\.tox|\.bundle|\.cargo|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
-const ARCH = /\.(zip|dmg|iso|pkg|tar|gz|tgz|bz2|xz|7z|rar|xip|raw|img|qcow2|vmdk|vdi|ipsw|sparseimage|sparsebundle|bak)$/i;
+const JUNK = /^(\$Recycle\.Bin|CrashDumps|INetCache|D3DSCache|node_modules|site-packages|bower_components|\.tox|\.bundle|\.cargo|DerivedData|Caches?|\.cache|\.npm|\.yarn|\.pnpm-store|\.gradle|\.m2|\.next|\.nuxt|\.turbo|\.parcel-cache|\.expo|\.svelte-kit|dist|build|target|__pycache__|\.venv|venv|vendor|Pods|\.Trash|CoreSimulator|\.terraform|tmp|temp|Logs?)$/i;
+const ARCH = /\.(zip|dmg|iso|pkg|msi|msix|appx|cab|vhdx?|wim|esd|tar|gz|tgz|bz2|xz|7z|rar|xip|raw|img|qcow2|vmdk|vdi|ipsw|sparseimage|sparsebundle|bak)$/i;
 const MEDIA = /\.(mov|mp4|m4v|mkv|avi|webm|jpe?g|png|heic|gif|tiff?|psd|cr2|nef|arw|dng|mp3|wav|aiff?|flac|m4a|aac|photoslibrary|fcpbundle|imovielibrary|logicx|band)$/i;
-const SYS = /^\/(System|private|usr|bin|sbin|cores|proc|sys|dev|run|boot|etc|lib|lib32|lib64|libx32|snap)(\/|$)/;
-// Home folders: /Users/name on macOS, /home/name and /root on Linux
-const HOME = String.raw`(?:\/(?:Users|home)\/[^/]+|\/root)`;
+const SYS = /^\/(System|private|usr|bin|sbin|cores|proc|sys|dev|run|boot|etc|lib|lib32|lib64|libx32|snap)(\/|$)|^\/[A-Z]:\/(Windows(\.old)?|System Volume Information|Recovery|Boot|EFI|PerfLogs|Config\.Msi|\$(?!Recycle\.Bin)[^/]*|pagefile\.sys|hiberfil\.sys|swapfile\.sys)(\/|$)/;
+// Home folders: /Users/name on macOS, /home/name and /root on Linux, C:\Users\name on Windows (/C:/Users/name in the report)
+const HOME = String.raw`(?:\/(?:Users|home)\/[^/]+|\/root|\/[A-Z]:\/Users\/[^/]+)`;
 
 const nf = (v, d) => new Intl.NumberFormat('en-US', {maximumFractionDigits: d}).format(v);
 const fmt = b => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (b >= 1000 && i < 4) { b /= 1000; i++ } return nf(b, i && b < 10 ? 1 : 0) + ' ' + u[i] };
@@ -303,9 +309,12 @@ const join = (p, name) => p === '/' ? '/' + name : p + '/' + name;
 const kidPath = (p, k) => k[0] === null || k.cat ? null : join(p, k[0]);
 const quote = p => "'" + p.replace(/'/g, "'\\''") + "'";
 // Never offer rm on the disk root, top-level folders, home folders, system paths or where keys and passwords live
-const SECRETS = new RegExp(String.raw`^${HOME}\/(\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.password-store|\.config\/gcloud|Library\/Keychains|\.local\/share\/keyrings)(\/|$)`);
-const HOMES = new RegExp(String.raw`^${HOME}(\/Library|\/\.Trash|\/\.config|\/\.local|\/\.local\/share|\/\.local\/share\/Trash(\/files)?)?$`);
-const canRm = p => !!p && p.split('/').length > 2 && !SYS.test(p) && !SECRETS.test(p) && !HOMES.test(p);
+const SECRETS = new RegExp(String.raw`^${HOME}\/(\.ssh|\.gnupg|\.aws|\.azure|\.kube|\.password-store|\.config\/gcloud|Library\/Keychains|\.local\/share\/keyrings|AppData\/Roaming\/gnupg|AppData\/(Roaming|Local)\/Microsoft\/(Credentials|Protect|Crypto|SystemCertificates|Vault))(\/|$)`);
+const HOMES = new RegExp(String.raw`^${HOME}(\/Library|\/\.Trash|\/\.config|\/\.local|\/\.local\/share|\/\.local\/share\/Trash(\/files)?|\/AppData(\/(Local|Roaming|LocalLow|Local\/Temp))?)?$`);
+// A drive is one level deeper on Windows (/C:/Users), and a user's whole Recycle Bin stays
+const canRm = p => !!p && p.split('/').length > (WIN ? 3 : 2) && !SYS.test(p) && !SECRETS.test(p) && !HOMES.test(p) && !/^\/[A-Z]:\/\$Recycle\.Bin\/[^/]+$/.test(p);
+// Windows paths in the report look like /C:/Users/me; people read C:\Users\me
+const show = p => !WIN ? p : p === '/' ? DISK : p.slice(1).replace(/\//g, '\\') + (/^\/[A-Z]:$/.test(p) ? '\\' : '');
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e };
 const label = n => n[0] ?? `${nf(n[2], 0)} other items`;
 const extOf = name => (name.match(/^.+\.([^.\s]+)$/)?.[1] || '').toLowerCase();
@@ -319,7 +328,7 @@ function inlineMd(s) {
   const codes = [];
   return esc(s.replace(/`([^`]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`))
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/(^|[^\w*])\*(?!\s)(.+?)\*(?!\w)/g, '$1<em>$2</em>').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/\u0000(\d+)\u0000/g, (_, i) => `<code${/^(~\/|\/)/.test(codes[i]) ? ' class="path" title="Show in Evict"' : ''}>${esc(codes[i])}</code>`);
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => `<code${/^(~[\/\\]|\/|[A-Za-z]:\\)/.test(codes[i]) ? ' class="path" title="Show in Evict"' : ''}>${esc(codes[i])}</code>`);
 }
 function md(src) {
   const out = [];
@@ -369,7 +378,8 @@ function catOf(n, p) {
   if (n[0] === null) return 'misc';
   if (SYS.test(p)) return 'sys';
   if (JUNK.test(n[0])) return 'junk';
-  if (/\.(app|appimage)$/i.test(n[0]) || LINUX && /^\/(opt|var\/lib\/(flatpak|snapd))\//.test(p)) return 'app';
+  if (/\.(app|appimage)$/i.test(n[0]) || LINUX && /^\/(opt|var\/lib\/(flatpak|snapd))\//.test(p)
+    || WIN && /^\/[A-Z]:\/(Program Files( \(x86\))?|Users\/[^/]+\/AppData\/Local\/Programs)\//.test(p)) return 'app';
   if (ARCH.test(n[0])) return 'arch';
   if (MEDIA.test(n[0])) return 'media';
   return isDir(n) ? null : 'data';
@@ -438,11 +448,12 @@ function live() {
 if (!D && window.LIVE) live();
 
 if (D) {
-  const root = D.tree, isDisk = root[0] === '/';
+  const root = D.tree, isDisk = root[0] === '/' || WIN && /^\/[A-Z]:$/.test(root[0]);
   // Inside the app (macOS or Linux), deletion and clipboard go through the native bridge
   const app = window.webkit?.messageHandlers?.evict;
-  const SHOW = LINUX ? 'Show in folder' : 'Show in Finder', SYSTEM = LINUX ? 'Linux' : 'macOS', MACHINE = LINUX ? 'Linux computer' : 'Mac';
-  if (LINUX) {
+  const SHOW = WIN ? 'Show in Explorer' : LINUX ? 'Show in folder' : 'Show in Finder', SYSTEM = WIN ? 'Windows' : LINUX ? 'Linux' : 'macOS';
+  const MACHINE = WIN ? 'Windows PC' : LINUX ? 'Linux computer' : 'Mac';
+  if (LINUX || WIN) {
     for (const k of document.querySelectorAll('kbd')) k.textContent = k.textContent.replace('⌘', 'Ctrl+').replace(/\+$/, '');
     for (const e of document.querySelectorAll('.pal-keys span, #sel-finder')) e.lastChild.textContent = e.lastChild.textContent.replace('Show in Finder', SHOW);
     $('search').title = 'Search (Ctrl+K)';
@@ -456,7 +467,7 @@ if (D) {
 
   // Space the scan couldn't see; free space only shows in the stats, a box of nothing helps no one
   const extra = [], hidden = isDisk ? D.total - D.free - root[1] : 0;
-  if (hidden > 0) extra.push(Object.assign(['Not visible to the scan (snapshots, protected files)', hidden], {cat: 'hidden'}));
+  if (hidden > 0) extra.push(Object.assign([WIN ? 'Not visible to the scan (system files, restore points, protected folders)' : 'Not visible to the scan (snapshots, protected files)', hidden], {cat: 'hidden'}));
 
   // Folders the user chose to hide from the map, remembered across scans
   let masked;
@@ -529,7 +540,7 @@ if (D) {
     }
     toast(msg);
   }
-  const copyPath = p => copy(p, 'Path copied');
+  const copyPath = p => copy(show(p), 'Path copied');
   const reveal = p => app ? app.postMessage({action: 'reveal', path: p}) : copy(LINUX ? 'xdg-open ' + quote(p.slice(0, p.lastIndexOf('/')) || '/') : 'open -R ' + quote(p), 'Command copied: paste it in Terminal');
   const remove = (p, size) => app ? app.postMessage({action: 'delete', path: p, size}) : copy('rm -rf ' + quote(p), 'rm command copied');
 
@@ -537,7 +548,7 @@ if (D) {
   const claude = !!(app && window.evictClaude);
   let langName = 'English';
   try { langName = new Intl.DisplayNames(['en'], {type: 'language'}).of((window.evictLang || navigator.language).split('-')[0]) || langName } catch {}
-  const tilde = p => D.home && (p === D.home || p.startsWith(D.home + '/')) ? '~' + p.slice(D.home.length) : p;
+  const tilde = p => D.home && (p === D.home || p.startsWith(D.home + '/')) ? '~' + (WIN ? p.slice(D.home.length).replace(/\//g, '\\') : p.slice(D.home.length)) : show(p);
   const rules = `Only advise: don't delete anything and don't run any command. Answer in ${langName}, in Markdown, and write every path in backticks.`;
 
   function itemPrompt(n, p, v) {
@@ -592,7 +603,7 @@ ${list(files, 20)}
 
 Give me a short, personal cleanup plan:
 1. Start with one bold line: how much space the safe quick wins free in total.
-2. "## Quick wins": the safest, biggest gains first, at most 6. For each: a "### " heading with what it is and its size, the path, then one line on what I lose and one line on how to clean it properly (the app's own setting or cleanup command first, e.g. ${LINUX ? 'Docker, the package manager cache, journald, Flatpak, snap, npm' : 'Docker, Xcode, simulators, Homebrew, npm'}; otherwise move it to the Trash).
+2. "## Quick wins": the safest, biggest gains first, at most 6. For each: a "### " heading with what it is and its size, the path, then one line on what I lose and one line on how to clean it properly (the app's own setting or cleanup command first, e.g. ${WIN ? 'Disk Cleanup or Storage Sense for Windows Update files, Docker and WSL, npm, Visual Studio' : LINUX ? 'Docker, the package manager cache, journald, Flatpak, snap, npm' : 'Docker, Xcode, simulators, Homebrew, npm'}; otherwise move it to the ${TRASH}).
 3. "## Worth a look": at most 6 lines, what needs my judgment (old downloads, disk images, videos, virtual machines).
 4. "## Leave alone": at most 4 lines, what looks big but shouldn't be deleted.
 Be concise. Only cite paths from this scan, written exactly as above.
@@ -700,7 +711,8 @@ ${rules}`;
   $('ai-body').addEventListener('click', e => {
     const c = e.target.closest('code.path');
     if (!c) return;
-    const p = c.textContent.replace(/^~(?=\/|$)/, D.home).replace(/\/\*?$/, '') || '/';
+    const text = WIN ? c.textContent.replace(/^([A-Za-z]):/, (_, d) => '/' + d.toUpperCase() + ':').replace(/\\/g, '/') : c.textContent;
+    const p = text.replace(/^~(?=\/|$)/, D.home).replace(/\/\*?$/, '') || '/';
     if (pathOf(resolve(p)) === p) return go(p);
     const parent = p.slice(0, p.lastIndexOf('/')) || '/', s = resolve(parent);
     if (pathOf(s) === parent && s.at(-1)[2].some(k => k[0] !== null && join(parent, k[0]) === p)) return go(parent, p);
@@ -709,7 +721,8 @@ ${rules}`;
   $('cur-wins').textContent = claude ? '✦ Quick wins' : 'Copy quick wins prompt';
   $('cur-wins').onclick = quickWins;
 
-  // Called by the app with the paths it deleted (freed = true) or moved to the Trash
+  // Called by the app with the paths it deleted (freed = true) or moved to the Trash. Windows renames what goes to the
+  // Recycle Bin, so there the moved items only show up after a rescan
   function applyRemoved(path, freed) {
     const cut = path.lastIndexOf('/'), parentPath = path.slice(0, cut) || '/', name = path.slice(cut + 1);
     const s = resolve(parentPath), parent = s.at(-1), k = parent[2].findIndex(n => n[0] === name);
@@ -717,7 +730,7 @@ ${rules}`;
     const [node] = parent[2].splice(k, 1), size = node[1];
     for (const n of s) n[1] -= size;
     const t = trash();
-    if (!freed && t && !path.startsWith(t.p + '/')) { t.s.at(-1)[2].push(node); for (const n of t.s) n[1] += size }
+    if (!freed && t && !WIN && !path.startsWith(t.p + '/')) { t.s.at(-1)[2].push(node); for (const n of t.s) n[1] += size }
     return size;
   }
   window.evictRemoved = (paths, freed) => {
@@ -726,7 +739,7 @@ ${rules}`;
     for (const q of selected.keys()) if (paths.some(p => q === p || q.startsWith(p + '/'))) selected.delete(q);
     resetMemo();
     if (freed) { D.free += size; stats() }
-    toast(`${paths.length > 1 ? `${nf(paths.length, 0)} items: ` : ''}${fmt(size)} ${freed ? 'freed' : 'moved to the Trash'}`);
+    toast(`${paths.length > 1 ? `${nf(paths.length, 0)} items: ` : ''}${fmt(size)} ${freed ? 'freed' : `moved to the ${TRASH}`}`);
     const gone = paths.find(p => curPath === p || curPath.startsWith(p + '/'));
     if (gone) go(gone.slice(0, gone.lastIndexOf('/')) || '/'); else render(false);
   };
@@ -745,7 +758,7 @@ ${rules}`;
 
   // Places to check on any disk: the Trash, where "Move to Trash" sends things, and every Downloads folder
   const nodeAt = p => { const s = resolve(p); return pathOf(s) === p ? s : null };
-  const trash = () => [D.home + '/.Trash', D.home + '/.local/share/Trash/files'].map(p => ({p, s: nodeAt(p)})).find(t => t.s);
+  const trash = () => [D.trash, D.home + '/.Trash', D.home + '/.local/share/Trash/files'].filter(Boolean).map(p => ({p, s: nodeAt(p)})).find(t => t.s);
   function downloadsList() {
     const out = [];
     const walk = (n, p) => {
@@ -774,7 +787,7 @@ ${rules}`;
     const chips = [], t = trash();
     if (t) {
       const v = total(t.s.at(-1), t.p);
-      chips.push(placeChip('trash', v ? `Trash · ${fmt(v)}` : 'Trash · empty', curPath === t.p || curPath.startsWith(t.p + '/'), () => go(t.p)));
+      chips.push(placeChip('trash', v ? `${TRASH} · ${fmt(v)}` : `${TRASH} · empty`, curPath === t.p || curPath.startsWith(t.p + '/'), () => go(t.p)));
     }
     downloads ??= downloadsList();
     if (downloads.length) {
@@ -817,7 +830,7 @@ ${rules}`;
     dot.style.background = CATS[it.cat][1];
     meta.append(dot, `${fmt(it.v)} · ${nf(it.v / viewSize * 100, 1)}% · ${CATS[it.cat][0]}`);
     tip.replaceChildren(el('div', 't-name', it.title || label(it.n)), meta);
-    if (it.p) tip.append(el('code', '', it.p), el('div', 'hint', (isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions · Space: preview') + (canRm(it.p) ? (LINUX ? ' · Ctrl-click: select' : ' · ⌘-click: select') : '')));
+    if (it.p) tip.append(el('code', '', show(it.p)), el('div', 'hint', (isDir(it.n) ? 'Click: open · Right-click: actions' : 'Click: actions · Space: preview') + (canRm(it.p) ? (LINUX || WIN ? ' · Ctrl-click: select' : ' · ⌘-click: select') : '')));
     tipW = tip.offsetWidth; tipH = tip.offsetHeight;
     tip.classList.add('on');
   }
@@ -960,7 +973,7 @@ ${rules}`;
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean), isExt = t => /^\*?\.[^./]+$/.test(t);
     const exts = terms.filter(isExt).map(t => t.replace(/^\*?\./, '')), words = terms.filter(t => !isExt(t));
     const match = (name, p) => (!exts.length || exts.includes(extOf(name)) || exts.includes(name.toLowerCase().slice(1)))
-      && words.every(w => (w.includes('/') ? p : name).toLowerCase().includes(w));
+      && words.every(w => (WIN && w.includes('\\') ? show(p) : w.includes('/') ? p : name).toLowerCase().includes(w));
     const found = [];
     let sum = 0;
     const walk = (n, p, inside) => {
@@ -1229,13 +1242,13 @@ ${rules}`;
     cur = stack.at(-1); curPath = pathOf(stack);
     viewSize = total(cur, curPath) + (stack.length === 1 ? extra.reduce((s, e) => s + e[1], 0) : 0);
     $('crumbs').replaceChildren(...stack.flatMap((n, i) => {
-      const a = el('a', '', i ? n[0] : (isDisk ? DISK : root[0]));
+      const a = el('a', '', i ? n[0] : (isDisk ? DISK : show(root[0])));
       a.href = '#' + encodeURIComponent(pathOf(stack.slice(0, i + 1)));
       return i ? [el('i', '', '›'), a] : [a];
     }), el('span', 'here', fmt(total(cur, curPath))));
     const inTrash = trash()?.p === curPath;
     $('cur-rm').hidden = !inTrash;
-    $('cur-rm').textContent = app ? 'Empty Trash…' : 'Copy empty-trash command';
+    $('cur-rm').textContent = app ? `Empty ${TRASH}…` : 'Copy empty-trash command';
     $('cur-rm').onclick = () => emptyTrash(curPath, cur[1]);
     renderPlaces();
 
@@ -1319,14 +1332,14 @@ ${rules}`;
   $('cur-more').onclick = e => {
     const r = e.currentTarget.getBoundingClientRect(), items = [menuItem(SHOW, () => reveal(curPath)), menuItem('Copy path', () => copyPath(curPath))];
     if (stack.length > 1) items.push(menuItem(claude ? '✦ Ask Claude what this is' : 'Copy AI prompt: what is this?', () => ask(cur, curPath, total(cur, curPath))));
-    if (trash()?.p === curPath) items.push(el('hr'), menuItem(app ? 'Empty Trash…' : 'Copy empty-trash command', () => emptyTrash(curPath, cur[1]), 'danger'));
+    if (trash()?.p === curPath) items.push(el('hr'), menuItem(app ? `Empty ${TRASH}…` : 'Copy empty-trash command', () => emptyTrash(curPath, cur[1]), 'danger'));
     else if (canRm(curPath)) items.push(el('hr'), menuItem(app ? 'Delete this folder…' : 'Copy rm -rf command', () => remove(curPath, cur[1]), 'danger'));
-    showMenu(stack.length > 1 ? cur[0] : isDisk ? DISK : root[0], fmt(total(cur, curPath)), items, r.left - 14, r.bottom - 6);
+    showMenu(stack.length > 1 ? cur[0] : isDisk ? DISK : show(root[0]), fmt(total(cur, curPath)), items, r.left - 14, r.bottom - 6);
   };
 
   $('masked').onclick = e => {
     const r = e.currentTarget.getBoundingClientRect();
-    showMenu('Hidden', 'Click to show again', [...[...masked].map(p => menuItem(p, () => setMask(p, false))), el('hr'), menuItem('Show all', () => setMask(null, false))], r.left - 14, r.bottom - 6);
+    showMenu('Hidden', 'Click to show again', [...[...masked].map(p => menuItem(tilde(p), () => setMask(p, false))), el('hr'), menuItem('Show all', () => setMask(null, false))], r.left - 14, r.bottom - 6);
   };
   document.addEventListener('mousedown', e => {
     if (!$('menu').hidden && !$('menu').contains(e.target) && !$('map').contains(e.target) && !$('list').contains(e.target) && e.target !== $('sel-info')) closeMenu();
@@ -1354,7 +1367,26 @@ ${rules}`;
     if ($('map').hidden || $('map').clientWidth + 'x' + $('map').clientHeight === lastSize) return;
     cancelAnimationFrame(raf); raf = requestAnimationFrame(() => render(false));
   }).observe($('map'));
+
+  // Windows has no header bar like GTK or a menu bar like macOS: the app's commands sit in the toolbar
+  if (app && window.evictMenu) {
+    $('app-menu').hidden = false;
+    $('app-menu').onclick = e => {
+      const r = e.currentTarget.getBoundingClientRect();
+      showMenu('Evict', window.evictVersion ? `Version ${window.evictVersion}` : '', window.evictMenu.map(([text, id, keys]) => {
+        const m = menuItem(text, () => app.postMessage({action: 'menu', id}));
+        if (keys) m.append(el('kbd', '', keys));
+        return m;
+      }), r.right - 220, r.bottom - 6);
+    };
+  }
+  window.evictUpdate = text => {
+    $('app-update').hidden = !text;
+    $('app-update').textContent = text;
+    $('app-update').onclick = () => app.postMessage({action: 'menu', id: 'update'});
+  };
   render(true);
+  app?.postMessage({action: 'ready'});
 }
 </script>
 </body>

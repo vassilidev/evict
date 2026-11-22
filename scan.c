@@ -1,12 +1,13 @@
-// Fast parallel disk usage scanner for macOS and Linux. Prints a pruned JSON tree on stdout.
+// Fast parallel disk usage scanner for macOS, Linux and Windows. Prints a pruned JSON tree on stdout.
 //
 // Why it is fast:
 // - macOS: getattrlistbulk(2), one syscall returns name + type + allocated size for a whole batch of
 //   directory entries, so files are never opened or stat'ed one by one.
 // - Linux: getdents64(2) with a large buffer, and d_type tells folders apart without any stat;
 //   only files get an fstatat for their allocated size.
-// - openat(parent_fd, name): no full path lookup, so threads don't fight over the same top-level
-//   vnodes in the kernel.
+// - Windows: NtQueryDirectoryFile returns name, attributes, allocated size and file id for a whole batch.
+// - openat(parent_fd, name), NtCreateFile relative to the parent on Windows: no full path lookup, so threads
+//   don't fight over the same top-level vnodes in the kernel.
 // - each thread walks depth-first on its own stack and only hands work out when a thread is idle.
 #include <fcntl.h>
 #include <pthread.h>
@@ -15,10 +16,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/resource.h>
-#include <sys/statvfs.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <winternl.h>
+#include <io.h>
+#include <sddl.h>
+#include <shellapi.h>
+#define OS "win"
+typedef HANDLE fd_t;
+#define BAD_FD(fd) ((fd) == NULL)
+#define close_fd CloseHandle
+#else
+#include <sys/resource.h>
+#include <sys/statvfs.h>
+typedef int fd_t;
+#define BAD_FD(fd) ((fd) < 0)
+#define close_fd close
 #ifdef __APPLE__
 #include <sys/attr.h>
 #include <sys/mount.h>
@@ -29,6 +45,7 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #define OS "linux"
+#endif
 #endif
 
 #define MIN_SIZE 1000000ULL  // smaller items are merged into one "others" entry
@@ -47,8 +64,12 @@ typedef struct Node {
 
 // An open directory kept alive until all its subdirectories have been opened from it
 typedef struct Dir {
-    int fd;
+    fd_t fd;
     _Atomic int refs;
+#ifdef _WIN32
+    uint64_t vol;  // volume serial, mixed into file ids
+    int ntfs;      // file ids are unique there, so hard links can be told apart
+#endif
 } Dir;
 
 // Inside a dependency folder (node_modules, vendor, .venv…) sizes are only added up into its node (sum):
@@ -106,7 +127,7 @@ static void push(Stack *s, Job j) {
 
 static void release(Dir *d) {
     if (atomic_fetch_sub_explicit(&d->refs, 1, memory_order_acq_rel) == 1) {
-        close(d->fd);
+        close_fd(d->fd);
         free(d);
     }
 }
@@ -139,14 +160,16 @@ static int link_seen(uint64_t key) {
     return 0;
 }
 
-// Skip every mount point outside the boot APFS container, plus the firmlinked Data volume
-// (already reached through /Users, /Applications...) and the sealed system snapshot copy.
+#ifndef _WIN32  // on Windows, other volumes are other drives, and mount points are reparse points, never followed
 static void add_skip(const char *path) {
     skips = xrealloc(skips, (nskips + 1) * sizeof *skips);
     skips[nskips++] = strdup(path);
 }
+#endif
 
 #ifdef __APPLE__
+// Skip every mount point outside the boot APFS container, plus the firmlinked Data volume
+// (already reached through /Users, /Applications...) and the sealed system snapshot copy.
 static void init_skips(void) {
     struct statfs *m;
     int n = getmntinfo(&m, MNT_NOWAIT);
@@ -167,6 +190,140 @@ static void init_skips(void) {
             add_skip(on);
     }
     add_skip("/Volumes");
+}
+#elif defined(_WIN32)
+// Paths in the report look like POSIX ones, so the page works unchanged: C:\Users\me is /C:/Users/me, and "/" is
+// every fixed drive when there are several. The app turns them back into Windows paths.
+#ifndef FILE_OPEN
+#define FILE_OPEN 1
+#endif
+#define DIR_FLAGS 0x4021   // FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_FOR_BACKUP_INTENT
+#define NO_FOLLOW 0x200000  // FILE_OPEN_REPARSE_POINT
+#define ID_FULL_DIR_INFO 38  // FileIdFullDirectoryInformation
+
+typedef struct {
+    ULONG NextEntryOffset, FileIndex;
+    LARGE_INTEGER CreationTime, LastAccessTime, LastWriteTime, ChangeTime, EndOfFile, AllocationSize;
+    ULONG FileAttributes, FileNameLength, EaSize;  // EaSize holds the reparse tag of a reparse point
+    LARGE_INTEGER FileId;
+    WCHAR FileName[1];
+} DirInfo;
+
+typedef NTSTATUS(NTAPI *CreateFn)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, PLARGE_INTEGER, ULONG,
+                                  ULONG, ULONG, ULONG, PVOID, ULONG);
+typedef NTSTATUS(NTAPI *QueryFn)(HANDLE, HANDLE, PVOID, PVOID, PIO_STATUS_BLOCK, PVOID, ULONG, int, BOOLEAN,
+                                 PUNICODE_STRING, BOOLEAN);
+static CreateFn nt_create;
+static QueryFn nt_query;
+static uint64_t disk_total, disk_free;
+static char drives[26][4];
+static int ndrives;
+
+static void init_skips(void) {
+    HMODULE nt = GetModuleHandleW(L"ntdll.dll");
+    nt_create = (CreateFn)(void *)GetProcAddress(nt, "NtCreateFile");
+    nt_query = (QueryFn)(void *)GetProcAddress(nt, "NtQueryDirectoryFile");
+    // As administrator, backup intent reads every folder whatever its permissions
+    HANDLE token;
+    TOKEN_PRIVILEGES tp = {1, {{{0, 0}, SE_PRIVILEGE_ENABLED}}};
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &token)) {
+        if (LookupPrivilegeValueW(NULL, L"SeBackupPrivilege", &tp.Privileges[0].Luid))
+            AdjustTokenPrivileges(token, FALSE, &tp, 0, NULL, NULL);
+        CloseHandle(token);
+    }
+}
+
+static WCHAR *widen(const char *s) {
+    int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
+    WCHAR *w = malloc(n * sizeof *w);
+    if (!w) { perror("malloc"); exit(1); }
+    MultiByteToWideChar(CP_UTF8, 0, s, -1, w, n);
+    return w;
+}
+
+static char *narrow(const WCHAR *w, int len) {
+    int n = WideCharToMultiByte(CP_UTF8, 0, w, len, NULL, 0, NULL, NULL);
+    char *s = malloc(n + 1);
+    if (!s) { perror("malloc"); exit(1); }
+    WideCharToMultiByte(CP_UTF8, 0, w, len, s, n, NULL, NULL);
+    s[n] = 0;
+    return s;
+}
+
+// C:\Users\me (or C:/Users/me) → /C:/Users/me
+static char *to_report(const char *native) {
+    size_t l = strlen(native);
+    char *p = malloc(l + 2);
+    if (!p) { perror("malloc"); exit(1); }
+    p[0] = '/';
+    for (size_t i = 0; i <= l; i++) p[i + 1] = native[i] == '\\' ? '/' : native[i];
+    for (l++; l > 1 && p[l - 1] == '/'; l--) p[l - 1] = 0;
+    return p;
+}
+
+// /C:/Users/me → \\?\C:\Users\me, /C: → \\?\C:\ (a drive root needs its backslash)
+static WCHAR *to_native(const char *report) {
+    char buf[4200];
+    int n = snprintf(buf, sizeof buf, "\\\\?\\%s%s", report + 1, strlen(report) == 3 ? "\\" : "");
+    if (n < 0 || n >= (int)sizeof buf) return NULL;
+    for (char *c = buf + 4; *c; c++) if (*c == '/') *c = '\\';
+    return widen(buf);
+}
+
+static HANDLE open_path(const char *report) {
+    WCHAR *w = to_native(report);
+    if (!w) return NULL;
+    HANDLE h = CreateFileW(w, FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                           OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    free(w);
+    return h == INVALID_HANDLE_VALUE ? NULL : h;
+}
+
+// The Windows openat: the name is looked up in the parent's handle only, and reparse points aren't followed
+static HANDLE open_at(HANDLE parent, const char *name) {
+    WCHAR w[600];
+    int n = MultiByteToWideChar(CP_UTF8, 0, name, -1, w, 600);
+    if (n <= 1) return NULL;
+    UNICODE_STRING us = {(USHORT)((n - 1) * 2), (USHORT)(n * 2), w};
+    OBJECT_ATTRIBUTES oa = {.Length = sizeof oa, .RootDirectory = parent, .ObjectName = &us};
+    IO_STATUS_BLOCK io;
+    HANDLE h;
+    NTSTATUS st = nt_create(&h, FILE_LIST_DIRECTORY | SYNCHRONIZE, &oa, &io, NULL, 0,
+                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_OPEN, DIR_FLAGS | NO_FOLLOW, NULL, 0);
+    return st >= 0 ? h : NULL;
+}
+
+// Every fixed drive (internal disks), like the real disks read on Linux
+static void find_drives(void) {
+    DWORD mask = GetLogicalDrives();
+    for (int i = 0; i < 26; i++) {
+        WCHAR d[] = {(WCHAR)('A' + i), ':', '\\', 0};
+        if (mask >> i & 1 && GetDriveTypeW(d) == DRIVE_FIXED && GetVolumeInformationW(d, NULL, 0, NULL, NULL, NULL, NULL, 0))
+            snprintf(drives[ndrives++], 4, "%c:", 'A' + i);
+    }
+}
+
+static void add_space(char drive) {
+    WCHAR d[] = {(WCHAR)drive, ':', '\\', 0};
+    ULARGE_INTEGER avail, size;
+    if (GetDiskFreeSpaceExW(d, &avail, &size, NULL)) disk_total += size.QuadPart, disk_free += avail.QuadPart;
+}
+
+// The user's Recycle Bin on the home drive: /C:/$Recycle.Bin/<user SID>
+static char *recycle_bin(const char *home) {
+    HANDLE token;
+    char *out = NULL;
+    if (!home[0] || !OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return NULL;
+    union { TOKEN_USER user; char buf[256]; } u;
+    DWORD n;
+    LPSTR sid;
+    if (GetTokenInformation(token, TokenUser, &u, sizeof u, &n) && ConvertSidToStringSidA(u.user.User.Sid, &sid)) {
+        out = malloc(strlen(sid) + 20);
+        if (out) sprintf(out, "/%.2s/$Recycle.Bin/%s", home + 1, sid);
+        LocalFree(sid);
+    }
+    CloseHandle(token);
+    return out;
 }
 #else
 static uint64_t disk_total, disk_free;
@@ -301,22 +458,80 @@ static void add_file(Scan *s, const char *name, size_t nlen, uint64_t alloc, uin
 
 static void scan_dir(Job j, char *buf, Stack *local) {
     Node *dir = j.node, *sum = j.sum ? j.sum : dir && !dir->path && is_deps(dir->name) ? dir : NULL;
-    int fd = j.parent ? openat(j.parent->fd, dir ? dir->name : j.name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
-                      : open(root, O_RDONLY | O_DIRECTORY);
+    const char *dname = dir ? dir->name : j.name;
+#ifdef _WIN32
+    // Without a parent: the scan root, or one of the drives under "/"
+    char top[8];
+    if (!j.parent && dname[0] != '/') snprintf(top, sizeof top, "/%s", dname);
+    fd_t fd = j.parent ? open_at(j.parent->fd, dname) : open_path(dname[0] == '/' ? dname : top);
+    Dir *from = j.parent;
+    uint64_t vol = 0;
+    int ntfs = 0;
+    if (from) vol = from->vol, ntfs = from->ntfs;
+    else if (!BAD_FD(fd)) {
+        DWORD serial = 0;
+        WCHAR fs[32] = L"";
+        GetVolumeInformationByHandleW(fd, NULL, 0, &serial, NULL, NULL, fs, 32);
+        vol = (uint64_t)serial << 48;
+        ntfs = !wcscmp(fs, L"NTFS");
+    }
+#else
+    fd_t fd = j.parent ? openat(j.parent->fd, dname, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) : open(root, O_RDONLY | O_DIRECTORY);
+#endif
     free(j.name);
     // The tree is being printed: a thread released late by a privacy prompt must not touch it
-    if (atomic_load(&stopping)) { if (fd >= 0) close(fd); return; }
+    if (atomic_load(&stopping)) { if (!BAD_FD(fd)) close_fd(fd); return; }
     if (j.parent) release(j.parent);
     Node *owner = dir ? dir : sum;  // a folder inside a dependency folder reports its errors on that folder
-    if (fd < 0) { __atomic_store_n(&owner->err, 1, __ATOMIC_RELAXED); return; }
+    if (BAD_FD(fd)) { __atomic_store_n(&owner->err, 1, __ATOMIC_RELAXED); return; }
     Dir *me = malloc(sizeof *me);
     if (!me) { perror("malloc"); exit(1); }
     me->fd = fd;
     atomic_init(&me->refs, 1);
+#ifdef _WIN32
+    me->vol = vol;
+    me->ntfs = ntfs;
+#endif
     Scan s = {dir, sum, me, local, 0, 0, 0, 0};
     size_t first = local->n;
 
-#ifdef __APPLE__
+#ifdef _WIN32
+    IO_STATUS_BLOCK io;
+    for (;;) {
+        NTSTATUS st = nt_query(fd, NULL, NULL, NULL, &io, buf, BUF_SIZE, ID_FULL_DIR_INFO, FALSE, NULL, FALSE);
+        // STATUS_NO_MORE_FILES, or STATUS_NO_SUCH_FILE for an empty drive root (FAT)
+        if (st < 0) {
+            if (st != (NTSTATUS)0x80000006 && st != (NTSTATUS)0xC000000F) __atomic_store_n(&owner->err, 1, __ATOMIC_RELAXED);
+            break;
+        }
+        for (char *p = buf;;) {
+            DirInfo *e = (DirInfo *)p;
+            int wl = (int)(e->FileNameLength / 2);
+            const WCHAR *wn = e->FileName;
+            if (!(wn[0] == '.' && (wl == 1 || (wl == 2 && wn[1] == '.')))) {
+                // shortcut: a name with a lone UTF-16 surrogate becomes U+FFFD and such a folder can't be reopened
+                char ename[1024];
+                int nlen = WideCharToMultiByte(CP_UTF8, 0, wn, wl, ename, sizeof ename - 1, NULL, NULL);
+                ename[nlen] = 0;
+                s.count++;
+                ULONG a = e->FileAttributes;
+                if (a & FILE_ATTRIBUTE_DIRECTORY) {
+                    // Junctions and symbolic links aren't followed; other reparse points (OneDrive folders) are real folders
+                    if (!(a & FILE_ATTRIBUTE_REPARSE_POINT) ||
+                        (e->EaSize != IO_REPARSE_TAG_MOUNT_POINT && e->EaSize != IO_REPARSE_TAG_SYMLINK))
+                        add_dir(&s, ename, nlen);
+                } else {
+                    // Listings don't give the link count: on NTFS every file goes through the hard link set
+                    add_file(&s, ename, nlen, (uint64_t)e->AllocationSize.QuadPart, ntfs ? 2 : 1,
+                             (uint64_t)e->FileId.QuadPart ^ vol);
+                }
+            }
+            if (!e->NextEntryOffset) break;
+            p += e->NextEntryOffset;
+        }
+        if (atomic_load_explicit(&stopping, memory_order_relaxed)) break;
+    }
+#elif defined(__APPLE__)
     struct attrlist al = {
         .bitmapcount = ATTR_BIT_MAP_COUNT,
         .commonattr = ATTR_CMN_RETURNED_ATTRS | ATTR_CMN_NAME | ATTR_CMN_ERROR | ATTR_CMN_DEVID |
@@ -500,14 +715,48 @@ static void emit(Node *n) {
 
 int main(int argc, char **argv) {
     static char rootbuf[4096];
-    const char *arg = "/", *home = getenv("HOME");
+    const char *arg = "/", *home = getenv("HOME"), *out_path = NULL;
+#ifdef _WIN32
+    // Arguments in UTF-8 whatever the code page: user names and folders are often not ASCII
+    LPWSTR *wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    argv = malloc((argc + 1) * sizeof *argv);
+    if (!wargv || !argv) return 1;
+    for (int i = 0; i < argc; i++) argv[i] = narrow(wargv[i], -1);
+    const WCHAR *profile = _wgetenv(L"USERPROFILE");
+    home = profile ? narrow(profile, -1) : NULL;
+#endif
     live = getenv("EVICT_PROGRESS") != NULL;
-    // evict-scan [--progress] [--home DIR] [folder]: flags too, since pkexec clears the environment
+    // evict-scan [--progress] [--home DIR] [--out FILE] [folder]: flags too, since pkexec clears the environment
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--progress")) live = 1;
         else if (!strcmp(argv[i], "--home") && i + 1 < argc) home = argv[++i];
+        else if (!strcmp(argv[i], "--out") && i + 1 < argc) out_path = argv[++i];
         else arg = argv[i];
     }
+    // --out FILE: the report in FILE and the messages in FILE.log, for a scanner started elevated (no pipes then)
+    if (out_path) {
+        char log[4200];
+        snprintf(log, sizeof log, "%s.log", out_path);
+#ifdef _WIN32
+        if (!_wfreopen(widen(out_path), L"wb", stdout) || !_wfreopen(widen(log), L"w", stderr)) return 1;
+#else
+        if (!freopen(out_path, "w", stdout) || !freopen(log, "w", stderr)) return 1;
+#endif
+    }
+#ifdef _WIN32
+    _setmode(_fileno(stdout), _O_BINARY);
+    if (home && home[0] != '/') home = to_report(home);
+    // "/" is every fixed drive; one drive alone is the root itself
+    if (!strcmp(arg, "/")) {
+        find_drives();
+        static char one[8];
+        if (ndrives == 1) snprintf(one, sizeof one, "/%s", drives[0]), arg = one;
+    } else if (arg[0] != '/') {
+        WCHAR full[4096], *w = widen(arg);
+        if (GetFullPathNameW(w, 4096, full, NULL)) arg = to_report(narrow(full, -1));
+        free(w);
+    }
+#endif
     snprintf(rootbuf, sizeof rootbuf, "%s", arg);
     for (size_t l = strlen(rootbuf); l > 1 && rootbuf[l - 1] == '/'; l--) rootbuf[l - 1] = 0;
     root = rootbuf;
@@ -517,6 +766,7 @@ int main(int argc, char **argv) {
     setiopolicy_np(IOPOL_TYPE_VFS_MATERIALIZE_DATALESS_FILES, IOPOL_SCOPE_PROCESS,
                    IOPOL_MATERIALIZE_DATALESS_FILES_OFF);
 #endif
+#ifndef _WIN32
     // Parents stay open while their subdirectories wait in a stack
     struct rlimit rl;
     if (!getrlimit(RLIMIT_NOFILE, &rl)) {
@@ -527,6 +777,7 @@ int main(int argc, char **argv) {
         setrlimit(RLIMIT_NOFILE, &rl);
 #endif
     }
+#endif
     init_skips();
     static char out[1 << 20];
     setvbuf(stdout, out, _IOFBF, sizeof out);
@@ -535,10 +786,28 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &t0);
     Node *top = new_node(root, strlen(root), 1);
     if (skip_state(root) == 2) top->path = strdup(root);
+#ifdef _WIN32
+    if (!strcmp(root, "/")) {
+        for (int i = 0; i < ndrives; i++) {
+            Node *d = new_node(drives[i], 2, 1);
+            add_kid(top, d);
+            push(&shared, (Job){d, NULL, NULL, NULL});
+            add_space(drives[i][0]);
+        }
+        atomic_store(&pending, ndrives);
+    } else {
+        push(&shared, (Job){top, NULL, NULL, NULL});
+        atomic_store(&pending, 1);
+        add_space(root[1]);
+    }
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    long ncpu = (long)si.dwNumberOfProcessors;
+#else
     push(&shared, (Job){top, NULL, NULL, NULL});
     atomic_store(&pending, 1);
-
     long ncpu = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
     int nth = ncpu < 1 ? 1 : ncpu > MAX_THREADS ? MAX_THREADS : (int)ncpu;
     pthread_t th[MAX_THREADS];
     for (int i = 0; i < nth; i++) pthread_create(&th[i], NULL, worker, NULL);
@@ -571,12 +840,16 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &t1);
     double secs = (t1.tv_sec - t0.tv_sec) + (t1.tv_nsec - t0.tv_nsec) / 1e9;
 
+#ifdef _WIN32
+    uint64_t disk = disk_total, avail = disk_free;
+#else
     struct statvfs vfs;
     statvfs(root, &vfs);
     // Like df: blocks reserved for root (5% on ext4) are neither used nor free, so they're left out of the size
     uint64_t disk = (uint64_t)(vfs.f_blocks - vfs.f_bfree + vfs.f_bavail) * vfs.f_frsize, avail = (uint64_t)vfs.f_bavail * vfs.f_frsize;
 #ifndef __APPLE__
     if (!strcmp(root, "/") && disk_total) disk = disk_total, avail = disk_free;
+#endif
 #endif
     char date[32];
     time_t now = time(NULL);
@@ -586,6 +859,10 @@ int main(int argc, char **argv) {
            (unsigned long long)disk, (unsigned long long)avail,
            (unsigned long long)atomic_load(&scanned), secs, date);
     emit_str(home ? home : "");
+#ifdef _WIN32
+    char *bin = home ? recycle_bin(home) : NULL;
+    if (bin) fputs(",\"trash\":", stdout), emit_str(bin);
+#endif
     fputs(",\"tree\":", stdout);
     emit(top);
     puts("}");

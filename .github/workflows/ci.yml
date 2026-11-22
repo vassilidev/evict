@@ -22,6 +22,9 @@ jobs:
             node --check "$RUNNER_TEMP/page.js"
           done
 
+      - name: Page path rules
+        run: node test-page.js
+
       - name: Build the universal app and DMG
         run: ./build.sh dmg
 
@@ -78,3 +81,35 @@ jobs:
   distros:
     needs: linux
     uses: ./.github/workflows/linux-distros.yml
+
+  windows-build:
+    name: Windows build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build for x64, ARM64 and x86, and the installer (llvm-mingw in an Ubuntu container)
+        run: windows/build.sh package
+
+      - name: Check the build
+        run: |
+          for arch in x64 arm64 x86; do
+            for f in Evict.exe evict-scan.exe WebView2Loader.dll index.html; do test -s ".build/windows/$arch/$f"; done
+          done
+          grep -q 'window.DATA = null; /\* __DATA__ \*/' .build/windows/x64/index.html
+          test "$(wc -c < .build/windows/x64/index.html)" -lt "$(wc -c < index.html)"  # the minifier really ran
+          ls -l .build/Evict-Setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: evict-windows
+          path: |
+            .build/Evict-Setup.exe
+            .build/windows
+          include-hidden-files: true  # .build/ is a hidden folder
+          if-no-files-found: error
+
+  # Install, scan, start and uninstall on Windows Server 2022 and 2025 (x64) and Windows 11 (ARM64)
+  windows:
+    needs: windows-build
+    uses: ./.github/workflows/windows.yml
