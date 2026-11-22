@@ -201,7 +201,7 @@ footer{margin-top:120px;border-top:1px solid var(--line)}
     <div class="cmd big ps"><code>irm https://vassilidev.github.io/evict/install.ps1 | iex</code><button class="copy" type="button" data-copy="irm https://vassilidev.github.io/evict/install.ps1 | iex" aria-label="Copy the install command"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span>Copy</span></button></div>
     <p class="note">The script downloads the installer from the latest release and checks its SHA-256 first. <a href="install.ps1">Read it</a> before running it if you like.</p>
     <ul class="check">
-      <li><b>SmartScreen may warn you</b> the first time: the installer isn't code-signed yet. Click <b>More info</b>, then <b>Run anyway</b>. The PowerShell line doesn't trigger it.</li>
+      <li><b>SmartScreen may warn you</b> the first time: the installer isn't code-signed yet (see the <a href="https://github.com/vassilidev/evict/blob/main/docs/code-signing.md">code signing policy</a>). Click <b>More info</b>, then <b>Run anyway</b>. The PowerShell line doesn't trigger it.</li>
       <li><b>Evict shows up in the Start menu</b>, and uninstalls from <b>Settings → Apps</b> like any app.</li>
       <li><b>Updates are built in</b>: Evict checks GitHub at launch and every 6 hours, and installs a new version in one click, only if it matches the checksum GitHub published.</li>
       <li><b>Microsoft Edge WebView2</b> draws the window. Windows 11 and up-to-date Windows 10 have it; otherwise Evict offers to install it from Microsoft.</li>
@@ -301,6 +301,7 @@ footer{margin-top:120px;border-top:1px solid var(--line)}
       <a href="https://github.com/vassilidev/evict/releases">All releases</a>
       <a href="https://github.com/vassilidev/evict">Source code</a>
       <a href="https://github.com/vassilidev/evict/issues">Report an issue</a>
+      <a href="https://github.com/vassilidev/evict/blob/main/docs/code-signing.md">Code signing policy</a>
     </nav>
   </div>
 </footer>

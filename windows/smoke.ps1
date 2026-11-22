@@ -11,6 +11,8 @@ $dir = "$env:LOCALAPPDATA\Programs\Evict"
 $data = "$env:LOCALAPPDATA\Evict"
 $shortcut = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Evict.lnk"
 $uninstall = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Evict'
+# install.ps1 runs in this scope and has its own $setup: PowerShell names ignore case, so keep the path elsewhere
+$installer = if ($Setup) { (Resolve-Path $Setup).Path }
 $shots = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
 function Fail($message) { Screenshot 'failure'; throw "FAIL: $message" }
 function Screenshot($name) {
@@ -31,14 +33,14 @@ if (-not ((Get-ItemProperty "HKLM:\$runtime" -ErrorAction SilentlyContinue).pv -
 
 # Install
 $watch = [Diagnostics.Stopwatch]::StartNew()
-if ($Setup) {
-  $env:EVICT_FILE = (Resolve-Path $Setup).Path
+if ($installer) {
+  $env:EVICT_FILE = $installer
   Invoke-Expression (Get-Content -Raw docs/install.ps1)
   Remove-Item Env:EVICT_FILE
 } else {
   Invoke-RestMethod https://vassilidev.github.io/evict/install.ps1 | Invoke-Expression
 }
-foreach ($f in 'Evict.exe', 'evict-scan.exe', 'index.html', 'WebView2Loader.dll', 'Uninstall.exe') {
+foreach ($f in 'Evict.exe', 'evict-scan.exe', 'index.html', 'Uninstall.exe') {
   if (-not (Test-Path "$dir\$f")) { Fail "not installed: $f" }
 }
 $watch.Stop()
@@ -48,7 +50,7 @@ if (-not (Test-Path $uninstall)) { Fail 'not listed in Settings > Apps' }
 # The icons as Windows shows them, kept with the screenshots: a broken icon comes out as Windows' generic one
 Add-Type -AssemblyName System.Drawing
 $icons = @{app = "$dir\Evict.exe"}
-if ($Setup) { $icons.setup = (Resolve-Path $Setup).Path }
+if ($installer) { $icons.setup = $installer }
 foreach ($name in $icons.Keys) { [System.Drawing.Icon]::ExtractAssociatedIcon($icons[$name]).ToBitmap().Save("$shots\evict-icon-$name.png") }
 $version = (Get-Item "$dir\Evict.exe").VersionInfo.ProductVersion
 if ($env:EVICT_VERSION -and $version -ne $env:EVICT_VERSION.TrimStart('v')) { Fail "expected Evict $env:EVICT_VERSION, got $version" }
@@ -77,7 +79,7 @@ function Check-Scanner($scanner) {
   Write-Host "Scanner OK: $got bytes ($scanner)"
 }
 Check-Scanner "$dir\evict-scan.exe"
-if ($Setup -and (Test-Path .build\windows\x86\evict-scan.exe)) { Check-Scanner (Resolve-Path .build\windows\x86\evict-scan.exe).Path }
+if ($installer -and (Test-Path .build\windows\x86\evict-scan.exe)) { Check-Scanner (Resolve-Path .build\windows\x86\evict-scan.exe).Path }
 
 # The whole computer, every fixed drive, cold then warm
 function Scan-All($label) {

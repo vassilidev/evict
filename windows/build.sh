@@ -1,6 +1,6 @@
 #!/bin/sh
-# Builds Evict for Windows in .build/windows/<arch>/ (x64, arm64 and x86): the app (Win32 + WebView2), the scanner,
-# the page and Microsoft's WebView2 loader. "windows/build.sh package" also makes .build/Evict-Setup.exe, one installer
+# Builds Evict for Windows in .build/windows/<arch>/ (x64, arm64 and x86): the app (Win32 + WebView2), the scanner
+# and the page. "windows/build.sh package" also makes .build/Evict-Setup.exe, one installer
 # for the three architectures that installs for the current user, no administrator rights needed.
 # Cross-compiles with llvm-mingw in an Ubuntu 22.04 container: runs from macOS or Linux with Docker.
 set -e
@@ -64,7 +64,6 @@ for arch in x64 arm64 x86; do
     -DVERSION="\"$version\"" -o "$out/Evict.exe" windows/evict.c /opt/res/Evict.exe/$arch.res \
     -lole32 -lshell32 -lshlwapi -ldwmapi -lcomctl32 -lbcrypt -lurlmon -luuid -ladvapi32
   $cc-w64-mingw32-strip "$out/Evict.exe" "$out/evict-scan.exe"
-  cp "/opt/webview2/build/native/$arch/WebView2Loader.dll" "$out/"
   cp $page "$out/index.html"
 done
 echo "✓ .build/windows (Evict $version)"

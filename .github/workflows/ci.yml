@@ -95,7 +95,7 @@ jobs:
       - name: Check the build
         run: |
           for arch in x64 arm64 x86; do
-            for f in Evict.exe evict-scan.exe WebView2Loader.dll index.html; do test -s ".build/windows/$arch/$f"; done
+            for f in Evict.exe evict-scan.exe index.html; do test -s ".build/windows/$arch/$f"; done
           done
           grep -q 'window.DATA = null; /\* __DATA__ \*/' .build/windows/x64/index.html
           test "$(wc -c < .build/windows/x64/index.html)" -lt "$(wc -c < index.html)"  # the minifier really ran

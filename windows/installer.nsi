@@ -64,6 +64,7 @@ Section
   ${Else}
     File "../.build/windows/x86/*"
   ${EndIf}
+  Delete "$INSTDIR\WebView2Loader.dll"  ; shipped by 1.12.0, Evict now finds the WebView2 Runtime itself
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\Evict.lnk" "$INSTDIR\Evict.exe"
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2

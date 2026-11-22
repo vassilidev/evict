@@ -1657,19 +1657,50 @@ static void find_trash(void) {
     CloseHandle(token);
 }
 
-typedef HRESULT(STDAPICALLTYPE *CreateEnv)(PCWSTR, PCWSTR, ICoreWebView2EnvironmentOptions *,
-                                           ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *);
-typedef HRESULT(STDAPICALLTYPE *RuntimeVersion)(PCWSTR, LPWSTR *);
+// The WebView2 Runtime, found the way Microsoft's loader finds it, so Evict ships no closed-source DLL: the Evergreen
+// runtime records its folder in the registry (for the machine, then for the user), and the EmbeddedBrowserWebView.dll
+// in it creates the environment. The open source webview library does the same.
+typedef HRESULT(STDMETHODCALLTYPE *CreateEnv)(BOOL, int, PCWSTR, ICoreWebView2EnvironmentOptions *,
+                                              ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler *);
+
+static CreateEnv find_runtime(void) {
+#if defined(__aarch64__)
+    const WCHAR *arch = L"arm64";
+#elif defined(__x86_64__)
+    const WCHAR *arch = L"x64";
+#else
+    const WCHAR *arch = L"x86";
+#endif
+    const HKEY roots[] = {HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER};
+    for (int i = 0; i < 2; i++) {
+        HKEY key;
+        WCHAR folder[MAX_PATH] = L"", dll[MAX_PATH + 64];
+        DWORD size = sizeof folder - sizeof *folder, type;
+        if (RegOpenKeyExW(roots[i], L"SOFTWARE\\Microsoft\\EdgeUpdate\\ClientState\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}", 0,
+                          KEY_READ | KEY_WOW64_32KEY, &key))
+            continue;
+        LSTATUS st = RegQueryValueExW(key, L"EBWebView", NULL, &type, (BYTE *)folder, &size);
+        RegCloseKey(key);
+        if (st || type != REG_SZ || !folder[0]) continue;
+        size_t n = wcslen(folder);
+        if (folder[n - 1] == '\\') folder[n - 1] = 0;
+        swprintf(dll, MAX_PATH + 64, L"%ls\\EBWebView\\%ls\\EmbeddedBrowserWebView.dll", folder, arch);
+        HMODULE lib = LoadLibraryExW(dll, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+        CreateEnv create = lib ? (CreateEnv)(void *)GetProcAddress(lib, "CreateWebViewEnvironmentWithOptionsInternal") : NULL;
+        if (create) return create;
+    }
+    return NULL;
+}
 
 // Windows 11 and up-to-date Windows 10 come with the WebView2 Runtime; elsewhere Evict installs it from Microsoft
-static BOOL runtime_ready(RuntimeVersion version) {
-    LPWSTR v = NULL;
-    if (SUCCEEDED(version(NULL, &v)) && v) return CoTaskMemFree(v), TRUE;
+static CreateEnv runtime_ready(void) {
+    CreateEnv create = find_runtime();
+    if (create) return create;
     if (dialog(TD_INFORMATION_ICON, L"Evict needs Microsoft Edge WebView2",
                L"Windows uses it to show app windows made of web pages, like Evict’s map. It comes with Windows 11; "
                L"on this computer it’s missing. Download and install it from Microsoft now (about 2 MB)?",
                L"Quit", IDCANCEL, L"Install", B_INSTALL, NULL) != B_INSTALL)
-        return FALSE;
+        return NULL;
     WCHAR setup[MAX_PATH];
     GetTempPathW(MAX_PATH, setup);
     wcscat(setup, L"MicrosoftEdgeWebview2Setup.exe");
@@ -1678,14 +1709,13 @@ static BOOL runtime_ready(RuntimeVersion version) {
         if (dialog(TD_ERROR_ICON, L"Couldn’t install WebView2", L"Check your Internet connection, or install it from Microsoft’s website.",
                    L"Quit", IDCANCEL, L"Open the Website", B_MAIN, NULL) == B_MAIN)
             ShellExecuteW(NULL, NULL, L"https://developer.microsoft.com/microsoft-edge/webview2/", NULL, NULL, SW_SHOWNORMAL);
-        return FALSE;
+        return NULL;
     }
     WaitForSingleObject(sei.hProcess, INFINITE);
     CloseHandle(sei.hProcess);
-    v = NULL;
-    if (SUCCEEDED(version(NULL, &v)) && v) return CoTaskMemFree(v), TRUE;
+    if ((create = find_runtime())) return create;
     inform(L"WebView2 isn’t installed", L"Install it, then open Evict again.");
-    return FALSE;
+    return NULL;
 }
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show) {
@@ -1717,16 +1747,8 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show) {
     INITCOMMONCONTROLSEX icc = {sizeof icc, ICC_STANDARD_CLASSES};
     InitCommonControlsEx(&icc);
 
-    WCHAR loader_path[MAX_PATH];
-    swprintf(loader_path, MAX_PATH, L"%ls\\WebView2Loader.dll", dir);
-    HMODULE loader = LoadLibraryW(loader_path);
-    CreateEnv create = loader ? (CreateEnv)(void *)GetProcAddress(loader, "CreateCoreWebView2EnvironmentWithOptions") : NULL;
-    RuntimeVersion version = loader ? (RuntimeVersion)(void *)GetProcAddress(loader, "GetAvailableCoreWebView2BrowserVersionString") : NULL;
-    if (!create || !version) {
-        MessageBoxW(NULL, L"App files are missing, please reinstall Evict.", L"Evict", MB_ICONERROR);
-        return 1;
-    }
-    if (!runtime_ready(version)) return 1;
+    CreateEnv create = runtime_ready();
+    if (!create) return 1;
 
     WNDCLASSEXW wc = {sizeof wc};
     wc.lpfnWndProc = window_proc;
@@ -1758,7 +1780,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show) {
 
     WCHAR profile_dir[MAX_PATH];
     in_data(profile_dir, L"WebView2");
-    if (FAILED(create(NULL, profile_dir, NULL, &env_ready_obj))) {
+    if (FAILED(create(TRUE, 0, profile_dir, NULL, &env_ready_obj))) {  // 0: the installed (Evergreen) runtime
         MessageBoxW(win, L"Microsoft Edge WebView2 couldn’t start. Restart your computer, then open Evict again.", L"Evict", MB_ICONERROR);
         return 1;
     }
