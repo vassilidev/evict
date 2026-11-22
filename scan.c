@@ -992,7 +992,9 @@ int main(int argc, char **argv) {
 #endif
     init_skips();
 #ifdef _WIN32
-    init_sealed();
+    // shortcut: the system folder cache stays off on Windows: on Windows Server 2025 (CI) the cached total still comes
+    // out 2 to 3 GB above a full walk, while Windows 11 and Server 2022 match; call init_sealed() here once 2025 does
+    (void)init_sealed;
 #endif
     // In a folder the uninstaller already removes. A scan as root (pkexec on Linux) keeps its own file: it reads
     // more folders, and root must not write in a folder the user controls.
