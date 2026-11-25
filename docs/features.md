@@ -21,13 +21,20 @@ Everything Evict does, on macOS, Windows and Linux.
 ## Clean up without regrets
 
 - **Duplicates, compared by content**: files of the same size and type are checked by their start, middle and end, by kind (videos, photos, audio, archives, documents). Each set keeps one copy, and **Select extra copies** picks the others. On macOS, APFS clones, which share their space with the original, are flagged: deleting them frees nothing.
-- **Select many, delete once**: checkboxes in lists and search results, `⌘`-click on the map, `Shift`-click for a range, **Select all** on a search. The selection stays while you search and browse; a bar shows its total size, lets you review it, preview it, show it in Finder or delete it all at once.
+- **Select many, delete once**: checkboxes in lists and search results, `⌘`-click on the map, `Shift`-click for a range, **Select all** on a search. The selection stays while you search and browse; a bar at the top of the window shows its total size, lets you review it, preview it, show it in Finder or delete it all at once, and search results drop what you delete.
 - **Trash and Downloads one click away**: shortcuts show their size (`~/.Trash` on macOS, the Recycle Bin on Windows, `~/.local/share/Trash` on Linux), items you move to the Trash from Evict show up there (on Windows after a rescan, since the Recycle Bin renames them), and **Empty Trash…** frees the space for good.
 - **Built-in cleanup** (app): move to the Trash or Recycle Bin, or delete permanently. The administrator password is only asked for when needed, once for a whole selection (UAC on Windows, `pkexec` and the desktop's polkit prompt on Linux).
 - **✦ Quick wins**: a personal cleanup plan for the whole disk. Evict sends Claude a digest of the scan (the biggest folders, regenerable folders, large files) and gets back the safest, biggest gains first, with each app's own cleanup command, what needs your judgment and what to leave alone.
 - **Ask Claude** what a folder or file is: what it is, which app creates it, whether it's safe to delete (✅ / ⚠️ / ⛔) and how to clean it properly.
 
   In the app (macOS, Windows and Linux), answers come from your local [Claude Code](https://claude.com/claude-code) and stream into a side panel, formatted, with every path clickable. Claude Code runs Opus at low effort (a quick wins plan in about 20 seconds) and without any tools, so it can only answer: nothing is ever deleted for you. Without it, or in the browser, the prompt is copied, ready to paste into any AI chat.
+
+## Watch it over time
+
+- **Stats**: a third view next to Map and List, for the disk or any folder: used, free and regenerable space, the space by category, the file types that weigh the most (a click searches them there), files by size and the biggest regenerable folders. A click on a category highlights it on the map.
+- **Scan after scan**: every scan is kept in a small history, and the Stats view draws it: the used space as a line, the change since the scan before and since the first one, and, at the pace of the last month, when the disk will be full. **What changed** lists the folders that grew or shrank by 1 GB or more since any earlier scan (folders of 500 MB or more are followed).
+- **Background scans** (app): turn them on in the Stats view, every day or every week, and Evict scans even while it's closed. When the disk grew by 10 GB or more since the scan before (2% of the disk on disks over 500 GB), or fell under 10% free, a notification says so and names the folder that grew. macOS runs them with a LaunchAgent, at 12:30 or when the Mac wakes up after, and only with Full Disk Access, so no permission prompt ever waits for you; Windows with a task in Task Scheduler; Linux with a systemd user timer.
+- **The history stays on your computer**: one line per scan, about a year of them, in `~/Library/Application Support/Evict/history.jsonl` on macOS, `%LOCALAPPDATA%\Evict\history.jsonl` on Windows and `~/.local/share/evict/history.jsonl` on Linux. `./evict` adds its scans to the same file.
 
 ## Safe and private
 

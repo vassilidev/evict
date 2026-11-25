@@ -27,4 +27,4 @@ Evict reads your disk on your computer and keeps the results there: no account, 
 - **Ask Claude and Quick wins**, only when you click them: the prompt shown in the app (names and sizes from the scan, never file contents) goes to your own [Claude Code](https://claude.com/claude-code), which you installed and signed in to yourself.
 - **WebView2 Runtime** (Windows), only when it's missing and you accept: Evict downloads Microsoft's installer for it.
 
-Uninstalling Evict removes the app and its scan reports: see [uninstalling](install.md#updates).
+Each scan also leaves one line in a history on your computer (sizes, and the paths of folders of 500 MB or more), for the Stats view; background scans, when you turn them on, keep it there too and send nothing anywhere. Uninstalling Evict removes the app and its scan reports, and on Windows its history: see [uninstalling](install.md#updates) and [where the history lives](features.md#watch-it-over-time).

@@ -30,12 +30,18 @@
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/list.png" alt="The list: folders sorted by size, each row drawn over a bar of its size"></td>
-    <td width="33%"><img src="docs/search.png" alt="Search: video files as cards with their size, some selected"></td>
-    <td width="33%"><img src="docs/duplicates.png" alt="Duplicates: sets of identical files with the copy to keep"></td>
+    <td width="50%"><img src="docs/list.png" alt="The list: folders sorted by size, each row drawn over a bar of its size"></td>
+    <td width="50%"><img src="docs/stats.png" alt="Stats: the disk by category, the used space scan after scan and the folders that changed"></td>
   </tr>
   <tr>
     <td align="center"><sub>The list</sub></td>
+    <td align="center"><sub>Stats, scan after scan</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/search.png" alt="Search: video files as cards with their size, some selected"></td>
+    <td width="50%"><img src="docs/duplicates.png" alt="Duplicates: sets of identical files with the copy to keep"></td>
+  </tr>
+  <tr>
     <td align="center"><sub>Search (<code>⌘K</code> or <code>Ctrl K</code>)</sub></td>
     <td align="center"><sub>Duplicates</sub></td>
   </tr>
@@ -57,6 +63,7 @@ Your disk is full and nothing tells you why. Evict reads all of it in seconds an
 
 - **The whole disk at a glance.** A treemap of every folder, or the same folder as a list sorted by size. Colors tell you what each thing is: caches and builds that regenerate on their own, archives and disk images, media, apps, your data, the system.
 - **Find anything in a keystroke.** `⌘K` (`Ctrl K` on Windows and Linux) searches the whole disk, largest files first. Type `.mov .iso` to filter by extension, press `Space` to preview, open archives without extracting them.
+- **See it coming.** A Stats view adds up the disk by category, file type and size, and charts it scan after scan with the folders that grew in between. Evict can scan in the background every day and notify you when the disk grows fast or runs out of space.
 - **It knows a developer's disk.** `node_modules`, `.venv`, `vendor`, `Pods`, DerivedData and build folders show up as one block each, marked as regenerable.
 - **Duplicates, for real.** Files are compared by their content, and one click selects every extra copy.
 - **Clean up without regrets.** Everything goes to the Trash or Recycle Bin first. System folders, home folders and the places your keys live can't be deleted, and Evict lists the `.env` files and private keys inside a folder before it goes.
@@ -96,6 +103,8 @@ Evict updates itself. Checksums, manual packages, requirements and uninstalling 
 
 **Why does macOS ask for Full Disk Access?** Without it, macOS hides part of the disk and interrupts the scan with a prompt per protected folder. [More →](docs/install.md#questions)
 
+**Does Evict run in the background?** Only if you turn on background scans in the Stats view: then it scans every day or every week, keeps each scan in a history on your computer, and notifies you when the disk grows fast or runs out of space. Turn them off in the same place. [More →](docs/features.md#watch-it-over-time)
+
 **Why is part of my disk "not visible to the scan"?** Some folders need administrator rights, and snapshots are never visible. **Rescan as Administrator** reads the rest on Windows and Linux. [More →](docs/features.md#questions)
 
 **How do I update or uninstall it?** Evict checks for updates on its own and installs them in one click on macOS and Windows. To uninstall, drag it to the Trash on macOS, use **Settings → Apps** on Windows, or add `--uninstall` to the install line on Linux. [Updates and uninstalling →](docs/install.md#updates)
@@ -122,6 +131,7 @@ Evict updates itself. Checksums, manual packages, requirements and uninstalling 
 
 - [x] Native [Linux](https://github.com/vassilidev/evict/issues/1) and [Windows](https://github.com/vassilidev/evict/issues/2) apps, with one-line installers
 - [x] Older systems: macOS 11, Windows on ARM64 and 32-bit PCs, RHEL 9, Debian 11 and Ubuntu 20.04
+- [x] Stats and history: the disk scan after scan, background scans and alerts
 - [ ] Faster administrator scans on Windows by reading the NTFS MFT directly, like WizTree
 - [ ] A code-signed Windows installer, and a winget package
 - [ ] Benchmarks on real PCs against WizTree, WinDirStat, `gdu`, `dua` and `ncdu`

@@ -35,6 +35,13 @@ if [ "${1:-}" = --uninstall ]; then
     if has dnf; then root dnf remove -y evict; elif has zypper; then root zypper --non-interactive remove evict; else root rpm -e evict; fi
   elif has pacman && pacman -Q evict > /dev/null 2>&1; then root pacman -R --noconfirm evict
   fi
+  # Background scans: the systemd user timer the app sets up
+  units="$HOME/.config/systemd/user"
+  if [ -e "$units/evict-scan.timer" ]; then
+    systemctl --user disable --now evict-scan.timer > /dev/null 2>&1 || true
+    rm -f "$units/evict-scan.timer" "$units/evict-scan.service" "$units/timers.target.wants/evict-scan.timer"
+    systemctl --user daemon-reload > /dev/null 2>&1 || true
+  fi
   rm -rf "$lib" "$HOME/.local/bin/evict" "$apps/com.vassilidev.evict.desktop" "$icons/com.vassilidev.evict.png" "$HOME/.cache/evict"
   [ "$(id -u)" -ne 0 ] || rm -f /var/cache/evict-system.cache
   say "✓ Evict removed"
