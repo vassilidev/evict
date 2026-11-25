@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -721,6 +722,105 @@ static void find_duplicates(int id, GPtrArray *groups) {
     g_object_unref(task);
 }
 
+// ---- Background scans: a systemd user timer runs "evict --background", which posts the scanner's alert, if any
+
+static char *unit_file(const char *name) { return g_build_filename(home, ".config/systemd/user", name, NULL); }
+
+static gboolean systemctl(const char *a, const char *b, const char *c) {
+    const char *argv[] = {"systemctl", "--user", a, b, c, NULL};
+    int status = 1;
+    return g_spawn_sync(NULL, (char **)argv, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
+                        NULL, NULL, NULL, NULL, &status, NULL) && status == 0;
+}
+
+// Read through the link enabling the timer: a timer that turned itself off (app uninstalled) reads as off
+static void send_schedule(gboolean failed) {
+    char *path = unit_file("timers.target.wants/evict-scan.timer"), *text = NULL;
+    g_file_get_contents(path, &text, NULL, NULL);
+    GString *js = g_string_new(NULL);
+    g_string_printf(js, "window.evictSchedule && evictSchedule('%s'%s)", !text ? "off" : strstr(text, "OnCalendar=Mon") ? "week" : "day",
+                    failed ? ", 'Background scans need systemd'" : "");
+    run_js(js);
+    g_free(path), g_free(text);
+}
+
+// Around midday; Persistent runs a missed scan at the next login. The service runs Evict through sh so that once
+// Evict is uninstalled, the timer turns itself off
+static void set_schedule(const char *every) {
+    char *timer = unit_file("evict-scan.timer"), *service = unit_file("evict-scan.service");
+    gboolean on = !strcmp(every, "day") || !strcmp(every, "week"), ok = TRUE;
+    if (on) {
+        char *exe = g_file_read_link("/proc/self/exe", NULL), *quoted = g_strescape(exe ? exe : "", NULL), *units = g_path_get_dirname(timer);
+        char *s = g_strdup_printf("[Unit]\nDescription=Evict background scan\n\n[Service]\nType=oneshot\nNice=19\nIOSchedulingClass=idle\n"
+                                  "ExecStart=/bin/sh -c 'if [ -x \"$$0\" ]; then exec \"$$0\" --background; fi; "
+                                  "systemctl --user disable --now evict-scan.timer' \"%s\"\n", quoted);
+        char *t = g_strdup_printf("[Unit]\nDescription=Evict background scan\n\n[Timer]\nOnCalendar=%s 12:00\nRandomizedDelaySec=1h\n"
+                                  "Persistent=true\n\n[Install]\nWantedBy=timers.target\n", strcmp(every, "week") ? "*-*-*" : "Mon *-*-*");
+        ok = !g_mkdir_with_parents(units, 0755) && g_file_set_contents(service, s, -1, NULL) && g_file_set_contents(timer, t, -1, NULL) &&
+             systemctl("daemon-reload", NULL, NULL) && systemctl("enable", "--now", "evict-scan.timer");
+        g_free(exe), g_free(quoted), g_free(units), g_free(s), g_free(t);
+    }
+    if ((!on || !ok) && g_file_test(timer, G_FILE_TEST_EXISTS)) {
+        systemctl("disable", "--now", "evict-scan.timer");
+        unlink(timer), unlink(service);
+        systemctl("daemon-reload", NULL, NULL);
+    }
+    g_free(timer), g_free(service);
+    send_schedule(!ok);
+}
+
+static guint32 note;
+
+static void note_signal(GDBusConnection *bus, const char *sender, const char *path, const char *iface, const char *signal,
+                        GVariant *args, gpointer loop) {
+    (void)bus, (void)sender, (void)path, (void)iface;
+    guint32 id;
+    g_variant_get_child(args, 0, "u", &id);
+    gboolean click = !strcmp(signal, "ActionInvoked");
+    if (id != note || (!click && strcmp(signal, "NotificationClosed"))) return;  // KDE's ActivationToken comes first
+    if (click) {
+        // In a unit of its own: this service's processes are killed when it ends, and run at idle priority
+        char *exe = g_file_read_link("/proc/self/exe", NULL);
+        const char *run[] = {"systemd-run", "--user", "--quiet", "--collect", exe, NULL}, *direct[] = {exe, NULL};
+        int status = 1;
+        if (!g_spawn_sync(NULL, (char **)run, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL, NULL, NULL, &status, NULL) || status)
+            g_spawn_async(NULL, (char **)direct, NULL, G_SPAWN_DEFAULT, NULL, NULL, NULL, NULL);
+        g_free(exe);
+    }
+    g_main_loop_quit(loop);
+}
+
+static gboolean stop_waiting(gpointer loop) {
+    g_main_loop_quit(loop);
+    return G_SOURCE_REMOVE;
+}
+
+// No window: a scan of the disk, then a notification when the scanner has something to say. Without a session bus or
+// a notification server, the scan is still kept in the history
+static int background(void) {
+    setpriority(PRIO_PROCESS, 0, 19);
+    char *scanner = g_build_filename(dir, "evict-scan", NULL), *text = NULL;
+    const char *argv[] = {scanner, "--alert", "--home", home, "/", NULL};
+    g_spawn_sync(NULL, (char **)argv, NULL, G_SPAWN_STDERR_TO_DEV_NULL, NULL, NULL, &text, NULL, NULL, NULL);
+    char *body = text ? g_utf8_make_valid(g_strstrip(text), -1) : NULL;  // folder names can be any bytes, D-Bus wants UTF-8
+    GDBusConnection *bus = body && *body ? g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL) : NULL;
+    if (!bus) return 0;
+    GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+    g_dbus_connection_signal_subscribe(bus, "org.freedesktop.Notifications", "org.freedesktop.Notifications", NULL,
+                                       "/org/freedesktop/Notifications", NULL, G_DBUS_SIGNAL_FLAGS_NONE, note_signal, loop, NULL);
+    const char *actions[] = {"default", "Open Evict", NULL};
+    GVariant *r = g_dbus_connection_call_sync(bus, "org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+                                              "org.freedesktop.Notifications", "Notify",
+                                              g_variant_new("(susss^asa{sv}i)", "Evict", 0, APP_ID, "Evict", body, actions, NULL, -1),
+                                              G_VARIANT_TYPE("(u)"), G_DBUS_CALL_FLAGS_NONE, 5000, NULL, NULL);
+    if (!r) return 0;
+    g_variant_get(r, "(u)", &note);
+    g_variant_unref(r);
+    g_timeout_add_seconds(600, stop_waiting, loop);
+    g_main_loop_run(loop);
+    return 0;
+}
+
 // ---- The bridge
 
 static void on_message(WebKitUserContentManager *m, WebKitJavascriptResult *r, gpointer u) {
@@ -784,6 +884,12 @@ static void on_message(WebKitUserContentManager *m, WebKitJavascriptResult *r, g
         g_free(prompt);
     } else if (!strcmp(action, "cancel")) {
         cancel();
+    } else if (!strcmp(action, "ready")) {
+        send_schedule(FALSE);
+    } else if (!strcmp(action, "schedule")) {
+        char *every = get_str(body, "every");
+        if (every) set_schedule(every);
+        g_free(every);
     }
     g_free(path);
     g_free(action);
@@ -881,8 +987,8 @@ static void scan(gboolean admin) {
     g_free(live), g_free(live_path), g_free(html);
 
     char *scanner = g_build_filename(dir, "evict-scan", NULL), *json_path = g_build_filename(cache, "scan.json", NULL);
-    const char *user[] = {scanner, "--progress", "--home", home, "/", NULL};
-    const char *root[] = {"pkexec", scanner, "--progress", "--home", home, "/", NULL};
+    const char *user[] = {scanner, "--progress", "--history", "--home", home, "/", NULL};
+    const char *root[] = {"pkexec", scanner, "--progress", "--history", "--home", home, "/", NULL};
     GSubprocessLauncher *l = g_subprocess_launcher_new(G_SUBPROCESS_FLAGS_STDERR_PIPE);
     g_subprocess_launcher_set_stdout_file_path(l, json_path);
     GError *e = NULL;
@@ -1106,6 +1212,7 @@ int main(int argc, char **argv) {
     dir = exe ? g_path_get_dirname(exe) : g_strdup("/usr/lib/evict");
     g_free(exe);
     home = g_strdup(g_get_home_dir());
+    if (argc > 1 && !strcmp(argv[1], "--background")) return background();
     trash_dir = g_build_filename(g_get_user_data_dir(), "Trash", NULL);
     trash_files = g_build_filename(trash_dir, "files", NULL);
     cache = g_build_filename(g_get_user_cache_dir(), "evict", NULL);

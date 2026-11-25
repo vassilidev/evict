@@ -9,7 +9,7 @@ if [ ! -x "$bin" ] || [ "$dir/scan.c" -nt "$bin" ]; then
 fi
 out="${TMPDIR:-/tmp}"
 out="${out%/}/evict.html"
-"$bin" "${1:-/}" > "$out.json"
+"$bin" --history "${1:-/}" > "$out.json"
 {
   sed '/__DATA__/,$d' "$dir/index.html"
   printf 'window.DATA='

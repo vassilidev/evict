@@ -304,13 +304,14 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
  "downloadUrl": "https://vassilidev.github.io/evict/download.html",
  "applicationCategory": "UtilitiesApplication",
  "operatingSystem": "macOS 11+, Windows 10+, Linux",
- "softwareVersion": "1.11.2",
+ "softwareVersion": "1.13.0",
  "screenshot": "https://vassilidev.github.io/evict/screenshot.png",
  "image": "https://vassilidev.github.io/evict/og.png",
  "featureList": [
   "Treemap and list of the whole disk",
   "Search for the largest files and by extension",
   "Duplicate files compared by content",
+  "Disk usage history, background scans and alerts when the disk grows fast or runs out of space",
   "Regenerable caches and dependency folders highlighted",
   "Move to Trash or delete, with protected system folders and secrets",
   "Optional cleanup advice from Claude Code"
@@ -562,6 +563,19 @@ footer{margin-top:120px;border-top:1px solid var(--line);overflow:hidden}
       </ul>
     </div>
     <div class="win"><div class="chrome"><i></i><i></i><i></i></div><picture><source type="image/webp" srcset="duplicates-640.webp 640w, duplicates.webp 1280w" sizes="(max-width:960px) calc(100vw - 48px), 620px"><img src="duplicates.png" width="1600" height="1000" loading="lazy" alt="Evict's duplicates panel: sets of identical files with the copy to keep"></picture></div>
+  </section>
+
+  <section id="stats" class="chapter flip">
+    <div class="text">
+      <h2>See it coming.</h2>
+      <p class="sub">The Stats view adds up the disk by category, type and size, and every scan adds a point to its chart: you see the disk filling up long before it's full.</p>
+      <ul class="points">
+        <li class="point"><i style="background:var(--grey)"></i><b>Scan after scan</b><p>The used space as a line, the pace, when the disk will be full at that pace, and the folders that grew or shrank since any earlier scan.</p></li>
+        <li class="point"><i style="background:var(--green)"></i><b>Scans in the background</b><p>Every day or every week, even with Evict closed. A notification tells you when the disk grows fast or runs out of space, and which folder grew.</p></li>
+        <li class="point"><i style="background:var(--orange)"></i><b>The whole picture, from the first scan</b><p>Space by category, the file types that weigh the most, files by size and the biggest regenerable folders, for the disk or any folder.</p></li>
+      </ul>
+    </div>
+    <div class="win"><div class="chrome"><i></i><i></i><i></i></div><picture><source type="image/webp" srcset="stats-640.webp 640w, stats.webp 1280w" sizes="(max-width:960px) calc(100vw - 48px), 620px"><img src="stats.png" width="1600" height="1000" loading="lazy" alt="Evict's Stats view: used and free space, the disk split by category, the used space over a month of scans and the folders that changed"></picture></div>
   </section>
 
   <section id="folders">

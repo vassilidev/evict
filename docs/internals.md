@@ -85,7 +85,8 @@ The scanner, the page and its JSON are shared; a platform app is a window with a
 | `dupes` | `id`, `groups: [[path…]…]` | compares candidates by sampled then full content |
 | `ask` / `cancel` | `id`, `prompt` | streams Claude Code's answer / stops the running job |
 | `menu` | `id` | runs a command from the page's ☰ menu (Windows: `rescan`, `admin`, `updates`, `update`) |
-| `ready` | | the map is shown: the app puts its update button back |
+| `ready` | | the map is shown: the app puts its update button back and calls `evictSchedule` |
+| `schedule` | `every`: `day`, `week` or `off` | turns background scans on or off, then calls `evictSchedule` |
 
 | App → page | Called with |
 | --- | --- |
@@ -96,7 +97,8 @@ The scanner, the page and its JSON are shared; a platform app is a window with a
 | `evictArchive(id, result)` | `{count, total, entries: [[name, size]…]}` or `{error}` |
 | `evictDupes(id, result)` | `{sets: [[[path, privateSize]…]…]}`, `-1` when the private size is unknown |
 | `evictUpdate(text)` | shows the toolbar's update button with that label (Windows) |
+| `evictSchedule(every, error)` | the background scans' state (`day`, `week` or `off`), and why they can't run, if so |
 
-Before the page loads, the app sets `window.evictClaude` (Claude Code found) and `window.evictLang`; the Windows app also sets `window.evictMenu` (the ☰ menu's commands) and `window.evictVersion`. The scanner runs as `evict-scan [--progress] [--home DIR] [--out FILE] [folder]`: the JSON report on stdout (`os`, `total`, `free`, `count`, `secs`, `date`, `home`, `tree`, and `trash` on Windows), progress lines on stderr (with `--out`, the report goes to FILE and the messages to FILE.log, for a scanner started elevated). The app puts the report in place of `window.DATA = null; /* __DATA__ */` in the page. On Windows, report paths look like POSIX ones (`/C:/Users/me`, and `/` for every drive when there are several), so the page's path logic is the same everywhere; the page shows them as `C:\Users\me`, and the app converts them back.
+Before the page loads, the app sets `window.evictClaude` (Claude Code found) and `window.evictLang`; the Windows app also sets `window.evictMenu` (the ☰ menu's commands) and `window.evictVersion`. The scanner runs as `evict-scan [--progress] [--home DIR] [--out FILE] [--history] [--alert] [folder]`: the JSON report on stdout (`os`, `total`, `free`, `count`, `secs`, `date`, `home`, `tree`, `trash` on Windows, and `history` with `--history`), progress lines on stderr (with `--out`, the report goes to FILE and the messages to FILE.log, for a scanner started elevated). `--history` appends this scan to the history file, one JSON line per scan (`r` the scanned folder, `d` the date, `total`, `free`, `size`, and `dirs`, every folder of 500 MB or more with its size; only the latest 30 lines keep `dirs`, and the file keeps 400 lines), and adds that folder's lines to the report. `--alert`, for background scans, keeps the scan in the history too, then prints one line instead of the report: the notification to show, or nothing. A scan that stalled, or one run as root, never writes the history. The app puts the report in place of `window.DATA = null; /* __DATA__ */` in the page. On Windows, report paths look like POSIX ones (`/C:/Users/me`, and `/` for every drive when there are several), so the page's path logic is the same everywhere; the page shows them as `C:\Users\me`, and the app converts them back.
 
 ```sh

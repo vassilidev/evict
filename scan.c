@@ -925,6 +925,158 @@ static void emit(Node *n) {
     putchar(']');
 }
 
+// History: each scan leaves one JSON line in a file of the user's (disk size, free space, size of the tree and of every
+// folder of HIST_DIR or more), so the page can chart the disk over time and tell what grew between two scans
+#define HIST_DIR 500000000ULL
+#define HIST_LINES 400  // about a year of daily scans
+#define HIST_DIRS 30    // the latest lines keep their folders, older ones only their totals
+
+typedef struct { char *s; size_t n, cap; } Buf;
+
+static void bput(Buf *b, const char *s, size_t n) {
+    if (b->n + n + 1 > b->cap) b->s = xrealloc(b->s, b->cap = (b->n + n + 1) * 2);
+    memcpy(b->s + b->n, s, n);
+    b->s[b->n += n] = 0;
+}
+
+static void bputs(Buf *b, const char *s) { bput(b, s, strlen(s)); }
+
+// Escaped like emit_str()
+static void bstr(Buf *b, const char *s) {
+    bputs(b, "\"");
+    for (const unsigned char *c = (const unsigned char *)s; *c; c++) {
+        char e[8];
+        if (*c == '"' || *c == '\\') e[0] = '\\', e[1] = *c, e[2] = 0;
+        else if (*c < 0x20 || *c == '<') snprintf(e, sizeof e, "\\u%04x", *c);
+        else e[0] = *c, e[1] = 0;
+        bputs(b, e);
+    }
+    bputs(b, "\"");
+}
+
+static void hist_dirs(Buf *b, Node *n, const char *path, int *first) {
+    if (!n->dir || n->size < HIST_DIR) return;
+    bputs(b, *first ? "[" : ",[");
+    *first = 0;
+    bstr(b, path);
+    char num[32];
+    snprintf(num, sizeof num, ",%llu]", (unsigned long long)n->size);
+    bputs(b, num);
+    for (uint32_t i = 0; i < n->nkids; i++) {
+        Node *k = n->kids[i];
+        if (!k->dir || k->size < HIST_DIR) continue;
+        size_t len = strlen(path) + strlen(k->name) + 2;
+        char *kp = malloc(len);
+        if (!kp) continue;
+        snprintf(kp, len, "%s/%s", strcmp(path, "/") ? path : "", k->name);
+        hist_dirs(b, k, kp, first);
+        free(kp);
+    }
+}
+
+static uint64_t num_after(const char *line, const char *key) {
+    const char *p = strstr(line, key);
+    return p ? strtoull(p + strlen(key), NULL, 10) : 0;
+}
+
+// A string written by bstr(), at s (on its opening quote): returns it unescaped and moves s past it
+static char *read_str(const char **s) {
+    const char *p = *s + 1;
+    char *out = malloc(strlen(p) + 1), *o = out;
+    if (!out) return NULL;
+    for (; *p && *p != '"'; p++) {
+        if (*p != '\\') { *o++ = *p; continue; }
+        p++;
+        if (*p == 'u') { *o++ = (char)strtol((char[]){p[1], p[2], p[3], p[4], 0}, NULL, 16); p += 4; }
+        else if (*p) *o++ = *p;
+        else break;
+    }
+    *o = 0;
+    *s = *p ? p + 1 : p;
+    return out;
+}
+
+static const char *dirs_of(const char *line) {
+    const char *p = strstr(line, "\"dirs\":[");
+    return p ? p + 8 : "";
+}
+
+// Reads the [path,size] pair at p and moves p to the next one; NULL after the last
+static char *next_dir(const char **p, uint64_t *size) {
+    if (**p != '[') return NULL;
+    const char *q = *p + 1;
+    char *name = q[0] == '"' ? read_str(&q) : NULL;
+    if (!name || *q != ',') { free(name); return NULL; }
+    *size = strtoull(q + 1, (char **)&q, 10);
+    if (*q != ']') { free(name); return NULL; }
+    *p = q + 1 + (q[1] == ',');
+    return name;
+}
+
+// Size of path in a history line, 0 when it wasn't among its folders
+static uint64_t dir_size(const char *line, const char *path) {
+    const char *p = dirs_of(line);
+    uint64_t v, found = 0;
+    for (char *name; !found && (name = next_dir(&p, &v)); free(name))
+        if (!strcmp(name, path)) found = v;
+    return found;
+}
+
+static void human(char *out, size_t len, uint64_t b) {
+    const char *u[] = {"B", "KB", "MB", "GB", "TB"};
+    double v = (double)b;
+    int i = 0;
+    while (v >= 1000 && i < 4) v /= 1000, i++;
+    snprintf(out, len, i && v < 10 ? "%.1f %s" : "%.0f %s", v, u[i]);
+}
+
+// One line for a notification, or nothing: the disk grew fast since the previous scan, or free space fell under 10%
+static void alert(const char *prev, const char *cur, uint64_t disk, uint64_t avail, uint64_t used, const char *home) {
+    uint64_t low = disk / 10, pfree = prev ? num_after(prev, "\"free\":") : UINT64_MAX;
+    uint64_t pused = prev ? num_after(prev, "\"total\":") - pfree : used;  // --alert is for disk scans: used = total - free
+    uint64_t grew = used > pused ? used - pused : 0, min = disk / 50 > 10000000000ULL ? disk / 50 : 10000000000ULL;
+    char a[32], b[32], text[8400] = "";
+    if (prev && grew >= min) {
+        // The deepest folder that holds at least half of the growth
+        const char *p = dirs_of(cur);
+        char *best = NULL;
+        uint64_t best_d = 0, v;
+        int best_depth = 0;
+        for (char *name; (name = next_dir(&p, &v)); ) {
+            uint64_t was = dir_size(prev, name);
+            int depth = 0;
+            for (const char *c = name; *c; c++) depth += *c == '/';
+            if (v > was && v - was >= grew / 2 && strcmp(name, root) && depth > best_depth) {
+                free(best);
+                best = name, best_d = v - was, best_depth = depth;
+            } else free(name);
+        }
+        char date[32] = "";
+        const char *d = strstr(prev, "\"d\":\"");
+        if (d) snprintf(date, sizeof date, "%.10s", d + 5);
+        human(a, sizeof a, grew);
+        snprintf(text, sizeof text, "Your disk grew by %s since the last scan, on %s.", a, date);
+        if (best) {
+            size_t hl = home ? strlen(home) : 0;
+            int tilde = hl && !strncmp(best, home, hl) && best[hl] == '/';
+            char *shown = best + (tilde ? hl : 0);
+#ifdef _WIN32
+            // As Explorer writes it: C:\Users\me\AppData, not /C:/Users/me/AppData
+            tilde = 0, shown = best + 1;
+            for (char *c = shown; *c; c++) if (*c == '/') *c = '\\';
+#endif
+            human(b, sizeof b, best_d);
+            snprintf(text + strlen(text), sizeof text - strlen(text), " Mostly %s%s (+%s).", tilde ? "~" : "", shown, b);
+            free(best);
+        }
+    }
+    if (low && avail < low && (pfree >= low || (pfree > avail && pfree - avail >= disk / 50))) {
+        human(a, sizeof a, avail);
+        snprintf(text + strlen(text), sizeof text - strlen(text), "%sOnly %s left on the disk (%.0f%%).", text[0] ? " " : "", a, avail * 100.0 / disk);
+    }
+    puts(text);
+}
+
 int main(int argc, char **argv) {
     static char rootbuf[4096];
     const char *arg = "/", *home = getenv("HOME"), *out_path = NULL;
@@ -938,9 +1090,14 @@ int main(int argc, char **argv) {
     home = profile ? narrow(profile, -1) : NULL;
 #endif
     live = getenv("EVICT_PROGRESS") != NULL;
-    // evict-scan [--progress] [--home DIR] [--out FILE] [folder]: flags too, since pkexec clears the environment
+    int history = 0, alert_only = 0;
+    // evict-scan [--progress] [--home DIR] [--out FILE] [--history] [--alert] [folder]: flags too, since pkexec clears
+    // the environment. --history keeps this scan in the history file and adds the history to the report; --alert
+    // (background scans of the disk) keeps it too, then prints a line for a notification, or an empty line, instead
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--progress")) live = 1;
+        else if (!strcmp(argv[i], "--history")) history = 1;
+        else if (!strcmp(argv[i], "--alert")) history = alert_only = 1;
         else if (!strcmp(argv[i], "--home") && i + 1 < argc) home = argv[++i];
         else if (!strcmp(argv[i], "--out") && i + 1 < argc) out_path = argv[++i];
         else arg = argv[i];
@@ -1099,6 +1256,94 @@ int main(int argc, char **argv) {
     time_t now = time(NULL);
     strftime(date, sizeof date, "%Y-%m-%d %H:%M", localtime(&now));
 
+    // The history file is in the user's data folder, not with the caches: cleaning caches must not lose it. A scan
+    // that stalled would chart a drop that never happened, and root (pkexec) must not write in the user's folder
+    char hist_file[4300] = "";
+    int writer = !atomic_load(&stopping);
+    if (history) {
+#ifdef _WIN32
+        if (cache_file[0]) snprintf(hist_file, sizeof hist_file, "%s\\Evict\\history.jsonl", getenv("LOCALAPPDATA"));
+#else
+        const char *xdg = getenv("XDG_DATA_HOME");
+        writer = writer && geteuid();
+#ifdef __APPLE__
+        const char *dirs[] = {"/Library", "/Library/Application Support", "/Library/Application Support/Evict", NULL};
+        xdg = NULL;
+#else
+        const char *dirs[] = {"/.local", "/.local/share", "/.local/share/evict", NULL};
+        if (xdg && xdg[0] == '/') dirs[0] = "/evict", dirs[1] = NULL;
+        else xdg = NULL;
+#endif
+        const char *base = xdg ? xdg : home;
+        for (int i = 0; base && dirs[i]; i++) {
+            snprintf(hist_file, sizeof hist_file, "%s%s", base, dirs[i]);
+            if (writer) mkdir(hist_file, 0700);
+        }
+        if (base) strcat(hist_file, "/history.jsonl");
+#endif
+    }
+    Buf old = {0}, cur = {0}, kept = {0}, shown = {0};
+    char **lines = NULL, *prev = NULL;
+    size_t nlines = 0;
+    if (hist_file[0]) {
+        FILE *f = fopen(hist_file, "rb");
+        char chunk[65536];
+        for (size_t got; f && (got = fread(chunk, 1, sizeof chunk, f)) > 0; ) bput(&old, chunk, got);
+        if (f) fclose(f);
+        Buf prefix = {0};
+        bputs(&prefix, "{\"r\":");
+        bstr(&prefix, root);
+        bputs(&prefix, ",");
+        for (char *l = old.s, *end; l && *l; l = end ? end + 1 : l + strlen(l)) {
+            if ((end = strchr(l, '\n'))) *end = 0;
+            if (*l != '{') continue;
+            lines = xrealloc(lines, (nlines + 2) * sizeof *lines);
+            lines[nlines++] = l;
+            if (!strncmp(l, prefix.s, prefix.n)) prev = l;
+        }
+        char num[160];
+        int first = 1;
+        bput(&cur, prefix.s, prefix.n - 1);
+        snprintf(num, sizeof num, ",\"d\":\"%s\",\"total\":%llu,\"free\":%llu,\"size\":%llu,\"dirs\":[", date,
+                 (unsigned long long)disk, (unsigned long long)avail, (unsigned long long)top->size);
+        bputs(&cur, num);
+        hist_dirs(&cur, top, root, &first);
+        bputs(&cur, "]}");
+        // The file again, this scan added; old lines keep only their totals
+        lines = xrealloc(lines, (nlines + 1) * sizeof *lines);
+        if (writer) lines[nlines++] = cur.s;
+        size_t from = nlines > HIST_LINES ? nlines - HIST_LINES : 0;
+        for (size_t i = from; i < nlines; i++) {
+            char *dirs = i + HIST_DIRS < nlines ? strstr(lines[i], ",\"dirs\":[") : NULL;
+            bput(&kept, lines[i], dirs ? (size_t)(dirs - lines[i]) : strlen(lines[i]));
+            bputs(&kept, dirs ? "}\n" : "\n");
+        }
+        if (writer) {
+            char tmp[4400];
+            snprintf(tmp, sizeof tmp, "%s.tmp", hist_file);
+            if ((f = fopen(tmp, "wb"))) {
+                int ok = fwrite(kept.s, 1, kept.n, f) == kept.n;
+                if (!fclose(f) && ok) {
+                    remove(hist_file);  // Windows doesn't rename over a file
+                    rename(tmp, hist_file);
+                }
+            }
+        }
+        if (!writer) lines[nlines++] = cur.s;  // still in the report, not in the file
+        // The report gets this root's lines only
+        for (size_t i = from; i < nlines; i++)
+            if (!strncmp(lines[i], prefix.s, prefix.n)) {
+                char *dirs = i + HIST_DIRS < nlines ? strstr(lines[i], ",\"dirs\":[") : NULL;
+                bputs(&shown, shown.n ? "," : "");
+                bput(&shown, lines[i], dirs ? (size_t)(dirs - lines[i]) : strlen(lines[i]));
+                if (dirs) bputs(&shown, "}");
+            }
+    }
+    if (alert_only) {
+        alert(prev, cur.s ? cur.s : "", disk, avail, disk - avail, home);
+        return 0;
+    }
+
     printf("{\"os\":\"" OS "\",\"total\":%llu,\"free\":%llu,\"count\":%llu,\"secs\":%.1f,\"date\":\"%s\",\"home\":",
            (unsigned long long)disk, (unsigned long long)avail,
            (unsigned long long)atomic_load(&scanned), secs, date);
@@ -1109,6 +1354,7 @@ int main(int argc, char **argv) {
 #endif
     fputs(",\"tree\":", stdout);
     emit(top);
+    if (hist_file[0]) printf(",\"history\":[%s]", shown.n ? shown.s : "");
     puts("}");
     fprintf(stderr, "\r%llu items scanned in %.2f s (%d threads)\n",
             (unsigned long long)atomic_load(&scanned), secs, nth);

@@ -1,6 +1,6 @@
 # Evict's whole life on one Windows machine: install with the website's install script, check the scanner on a
-# fixture and on the whole computer, start the app (it must scan and show its map), then uninstall and check that
-# nothing is left. CI runs it on Windows Server 2022 and 2025 (x64) and Windows 11 (ARM64).
+# fixture and on the whole computer, start the app (it must scan and show its map), run a background scan, then
+# uninstall and check that nothing is left. CI runs it on Windows Server 2022 and 2025 (x64) and Windows 11 (ARM64).
 # Usage: windows/smoke.ps1 <Evict-Setup.exe>   an installer built by CI (its x86 build is checked too, from .build)
 #        windows/smoke.ps1                     the published release, through the website (EVICT_VERSION)
 param([string]$Setup)
@@ -115,6 +115,18 @@ Write-Host "App OK: map shown with $boxes boxes, its own scan (warm) took $secs 
 $app.CloseMainWindow() | Out-Null
 if (-not $app.WaitForExit(15000)) { Stop-Process $app -Force; Fail "the app didn't close" }
 Get-Process msedgewebview2 -ErrorAction SilentlyContinue | Wait-Process -Timeout 20 -ErrorAction SilentlyContinue
+
+# A background scan, as the scheduled task runs it (this run's build only: a published release may predate it). It
+# and the app's scan each keep a line in the history
+if ($installer) {
+  $bg = Start-Process "$dir\Evict.exe" -ArgumentList '--background' -PassThru
+  $bg.Handle | Out-Null  # keeps the exit code readable once it quits
+  if (-not $bg.WaitForExit(300000)) { Stop-Process $bg -Force; Fail 'the background scan never ended' }
+  if ($bg.ExitCode -ne 0) { Fail "the background scan failed (exit code $($bg.ExitCode))" }
+  $scans = @(Get-Content "$data\history.jsonl" -ErrorAction SilentlyContinue).Count
+  if ($scans -lt 2) { Fail "$scans scans in the history, expected 2" }
+  Write-Host "Background scan OK: $scans scans in the history"
+}
 
 # Uninstall: nothing may be left (the uninstaller runs from a temporary copy, so wait for it)
 Start-Process "$dir\Uninstall.exe" -ArgumentList '/S' -Wait

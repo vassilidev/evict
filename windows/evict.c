@@ -1,5 +1,5 @@
 // Evict for Windows: the shared page (index.html) in a WebView2 window, with a native bridge for what a web page
-// can't do: Recycle Bin and deletion, Explorer, previews, archives, duplicates and Claude Code answers.
+// can't do: Recycle Bin and deletion, Explorer, previews, archives, duplicates, Claude Code answers and scheduled scans.
 // A script injected at document start gives the page the bridge object it uses on macOS and Linux
 // (window.webkit.messageHandlers.evict), forwarding to WebView2's chrome.webview.postMessage.
 // Report paths look like POSIX ones (/C:/Users/me) so the page runs unchanged; they're converted at the edges.
@@ -33,7 +33,7 @@
 #define BG RGB(12, 14, 18)  // the page's background, #0c0e12
 #define LONG_PATH 32768
 
-enum { WM_JS = WM_APP, WM_SCANNED, WM_CHECKED, WM_FETCHED };
+enum { WM_JS = WM_APP, WM_SCANNED, WM_CHECKED, WM_FETCHED, WM_TRAY };
 enum { B_MAIN = 100, B_DELETE, B_INSTALL };
 
 static HWND win;
@@ -80,6 +80,11 @@ static void add_js(Str *b, const WCHAR *s) {
         else add(b, s, 1);
     }
     add(b, L"\"", 1);
+}
+
+// A string as HTML or XML text
+static void add_xml(Str *b, const WCHAR *s) {
+    for (; *s; s++) adds(b, *s == '<' ? L"&lt;" : *s == '&' ? L"&amp;" : (WCHAR[]){*s, 0});
 }
 
 static WCHAR *wide(const char *s, int n, UINT cp) {
@@ -1097,8 +1102,7 @@ static void show_failure(const WCHAR *message) {
     adds(&html, L"<body style='margin:0;height:100vh;display:grid;place-items:center;background:#0c0e12;color:#e8eaf0;"
                 L"font:15px system-ui,sans-serif'><div style='text-align:center;max-width:520px'><h2>The scan failed</h2>"
                 L"<p style='color:#8b93a1'>");
-    for (const WCHAR *c = message; *c; c++)
-        adds(&html, *c == '<' ? L"&lt;" : *c == '&' ? L"&amp;" : (WCHAR[]){*c, 0});
+    add_xml(&html, message);
     adds(&html, L"</p><p style='color:#8b93a1'>Press Ctrl+R to try again.</p></div></body>");
     if (web) ICoreWebView2_NavigateToString(web, html.s);
     free(html.s);
@@ -1191,7 +1195,7 @@ static void scan(BOOL admin) {
     scanning = TRUE;
     admin_scan = admin;
     if (admin) {
-        swprintf(args, MAX_PATH * 3, L"--progress --home \"%ls\" --out \"%ls\" /", home, json);
+        swprintf(args, MAX_PATH * 3, L"--progress --history --home \"%ls\" --out \"%ls\" /", home, json);
         SHELLEXECUTEINFOW sei = {sizeof sei, SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC, win, L"runas", scanner, args, NULL, SW_HIDE};
         HANDLE t = NULL;
         if (ShellExecuteExW(&sei) && sei.hProcess && (t = CreateThread(NULL, 0, admin_thread, sei.hProcess, 0, NULL))) return (void)CloseHandle(t);
@@ -1200,7 +1204,7 @@ static void scan(BOOL admin) {
     }
     SECURITY_ATTRIBUTES sa = {sizeof sa, NULL, TRUE};
     HANDLE out = CreateFileW(json, GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS, 0, NULL);
-    swprintf(args, MAX_PATH * 3, L"\"%ls\" --progress --home \"%ls\" /", scanner, home);
+    swprintf(args, MAX_PATH * 3, L"\"%ls\" --progress --history --home \"%ls\" /", scanner, home);
     Scan *s = calloc(1, sizeof *s);
     HANDLE t = NULL;
     BOOL ok = out != INVALID_HANDLE_VALUE && spawn(args, NULL, out, &s->c, &scan_job);
@@ -1248,6 +1252,146 @@ static void scanned(DWORD code, char *error) {
     }
     DeleteFileW(json_path);
     free(json), free(error);
+}
+
+// ---- Background scans: a task in Task Scheduler runs Evict.exe --background, which notifies when the disk grew fast
+// or free space runs out
+
+static void drain(Child *c, char *line) {}
+
+// Runs a command line hidden and waits for it: its exit code, -1 if it didn't start. Its output goes to the file `out` if given
+static DWORD run(WCHAR *cmd, const WCHAR *out) {
+    SECURITY_ATTRIBUTES sa = {sizeof sa, NULL, TRUE};
+    HANDLE f = out ? CreateFileW(out, GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS, 0, NULL) : NULL, j = NULL;
+    Child c = {0};
+    DWORD code = (DWORD)-1;
+    if (f != INVALID_HANDLE_VALUE && spawn(cmd, NULL, f, &c, &j)) {
+        read_lines(&c, drain);
+        GetExitCodeProcess(c.proc, &code);
+        CloseHandle(c.proc), CloseHandle(c.out);
+        if (j) CloseHandle(j);
+    }
+    if (f && f != INVALID_HANDLE_VALUE) CloseHandle(f);
+    return code;
+}
+
+// schtasks.exe on this user's task (task names are shared by everyone on the computer); its exit code
+static DWORD schtasks(const WCHAR *args, const WCHAR *out) {
+    WCHAR cmd[MAX_PATH * 3], sys[MAX_PATH];
+    const WCHAR *user = _wgetenv(L"USERNAME");
+    GetSystemDirectoryW(sys, MAX_PATH);
+    swprintf(cmd, MAX_PATH * 3, L"\"%ls\\schtasks.exe\" %ls /TN \"Evict background scan (%ls)\"", sys, args, user ? user : L"");
+    return run(cmd, out);
+}
+
+static const WCHAR *scheduled;  // "day", "week" or "off", once known
+
+static const WCHAR *schedule_state(void) {
+    WCHAR path[MAX_PATH];
+    DWORD len = 0, k = 0;
+    in_data(path, L"task.xml");
+    char *xml = schtasks(L"/Query /XML", path) ? NULL : read_file(path, &len);
+    DeleteFileW(path);
+    if (!xml) return L"off";
+    // The task's XML comes in UTF-16 or ANSI: without its NUL bytes, its tags read the same
+    for (DWORD i = 0; i < len; i++)
+        if (xml[i]) xml[k++] = xml[i];
+    xml[k] = 0;
+    const WCHAR *state = strstr(xml, "ScheduleByWeek") ? L"week" : L"day";
+    free(xml);
+    return state;
+}
+
+static void show_schedule(const WCHAR *error) {
+    Str js = {0};
+    addf(&js, L"window.evictSchedule && evictSchedule('%ls'", scheduled);
+    if (error) adds(&js, L", "), add_js(&js, error);
+    adds(&js, L")");
+    run_js(&js);
+}
+
+// Around noon every day or every Monday, or as soon as possible after a missed one; on battery too, at low priority,
+// while the user is signed in
+static void schedule(const WCHAR *every) {
+    BOOL week = !wcscmp(every, L"week"), ok = TRUE;
+    if (week || !wcscmp(every, L"day")) {
+        WCHAR path[MAX_PATH], exe[MAX_PATH], args[MAX_PATH + 32];
+        GetModuleFileNameW(NULL, exe, MAX_PATH);
+        in_data(path, L"task.xml");
+        swprintf(args, MAX_PATH + 32, L"/Create /F /XML \"%ls\"", path);
+        Str xml = {0};
+        adds(&xml, L"\xFEFF<?xml version=\"1.0\" encoding=\"UTF-16\"?><Task version=\"1.2\" "
+                   L"xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\"><Triggers><CalendarTrigger>"
+                   L"<StartBoundary>2026-01-05T12:00:00</StartBoundary>");
+        adds(&xml, week ? L"<ScheduleByWeek><DaysOfWeek><Monday/></DaysOfWeek><WeeksInterval>1</WeeksInterval></ScheduleByWeek>"
+                        : L"<ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>");
+        adds(&xml, L"</CalendarTrigger></Triggers><Principals><Principal id=\"Author\"><LogonType>InteractiveToken</LogonType>"
+                   L"<RunLevel>LeastPrivilege</RunLevel></Principal></Principals><Settings>"
+                   L"<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>"
+                   L"<StartWhenAvailable>true</StartWhenAvailable><ExecutionTimeLimit>PT1H</ExecutionTimeLimit><Priority>7</Priority>"
+                   L"</Settings><Actions Context=\"Author\"><Exec><Command>\"");
+        add_xml(&xml, exe);
+        adds(&xml, L"\"</Command><Arguments>--background</Arguments></Exec></Actions></Task>");
+        ok = write_file(path, xml.s, (DWORD)(xml.n * sizeof(WCHAR))) && !schtasks(args, NULL);
+        DeleteFileW(path);
+        free(xml.s);
+    } else schtasks(L"/Delete /F", NULL);
+    scheduled = ok ? schedule_state() : L"off";
+    show_schedule(ok ? NULL : L"Couldn’t schedule the background scans.");
+}
+
+static LRESULT CALLBACK notify_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
+    switch (m) {
+    case WM_TRAY:
+        if (LOWORD(l) == NIN_BALLOONUSERCLICK) {
+            WCHAR exe[MAX_PATH];
+            GetModuleFileNameW(NULL, exe, MAX_PATH);
+            ShellExecuteW(NULL, NULL, exe, NULL, NULL, SW_SHOWNORMAL);
+        }
+        if (LOWORD(l) == NIN_BALLOONUSERCLICK || LOWORD(l) == NIN_BALLOONTIMEOUT || LOWORD(l) == NIN_BALLOONHIDE) DestroyWindow(h);
+        return 0;
+    case WM_TIMER:
+        DestroyWindow(h);
+        return 0;
+    case WM_DESTROY: {
+        NOTIFYICONDATAW n = {sizeof n, h, 1};
+        Shell_NotifyIconW(NIM_DELETE, &n);
+        PostQuitMessage(0);
+        return 0;
+    }
+    }
+    return DefWindowProcW(h, m, w, l);
+}
+
+// Evict.exe --background: the scanner's line, if any, as a notification (a toast on Windows 10 and 11) for a minute at most
+static int background(HINSTANCE inst) {
+    WCHAR path[MAX_PATH], cmd[MAX_PATH * 3];
+    in_data(path, L"alert.txt");
+    swprintf(cmd, MAX_PATH * 3, L"\"%ls\" --alert --home \"%ls\" /", scanner, home);
+    SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);  // the scanner inherits it
+    DWORD code = run(cmd, path);
+    char *line = code ? NULL : read_file(path, NULL);
+    DeleteFileW(path);
+    WCHAR *text = line ? wide(line, -1, CP_UTF8) : NULL;
+    free(line);
+    if (text) StrTrimW(text, L" \r\n");
+    if (!text || !*text) return code != 0;
+    WNDCLASSEXW wc = {sizeof wc};
+    wc.lpfnWndProc = notify_proc;
+    wc.hInstance = inst;
+    wc.lpszClassName = L"Evict background";  // not "Evict": the installer and a second Evict find the app's window by it
+    RegisterClassExW(&wc);
+    NOTIFYICONDATAW n = {sizeof n, CreateWindowExW(0, wc.lpszClassName, L"Evict", 0, 0, 0, 0, 0, NULL, NULL, inst, NULL), 1,
+                         NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_INFO, WM_TRAY, LoadIconW(inst, MAKEINTRESOURCEW(1)), L"Evict"};
+    n.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;
+    wcscpy(n.szInfoTitle, L"Evict");
+    wcsncpy(n.szInfo, text, ARRAYSIZE(n.szInfo) - 1);
+    free(text);
+    if (!n.hWnd || !Shell_NotifyIconW(NIM_ADD, &n)) return 1;
+    SetTimer(n.hWnd, 1, 60 * 1000, NULL);
+    MSG msg;
+    while (GetMessageW(&msg, NULL, 0, 0) > 0) DispatchMessageW(&msg);
+    return 0;
 }
 
 // ---- Updates: the latest release's Evict-Setup.exe, checked against GitHub's SHA-256, installs over this copy
@@ -1459,9 +1603,14 @@ static void on_message(J *body) {
         else if (!wcscmp(what, L"admin")) scan(TRUE);
         else if (!wcscmp(what, L"updates")) check_updates(TRUE);
         else if (!wcscmp(what, L"update")) prompt_update();
+    } else if (!wcscmp(action, L"schedule")) {
+        WCHAR *every = get_str(body, L"every");
+        if (every) schedule(every);
     } else if (!wcscmp(action, L"ready")) {
-        // The map is shown: the update button comes back, and a smoke test gets its proof
+        // The map is shown: the update button and the schedule come back, and a smoke test gets its proof
         if (latest) update_button();
+        if (!scheduled) scheduled = schedule_state();
+        show_schedule(NULL);
         if (smoke) {
             Str js = {0};
             adds(&js, L"chrome.webview.postMessage({action: 'smoke', boxes: document.querySelectorAll('#map .box').length})");
@@ -1731,6 +1880,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show) {
     swprintf(data, MAX_PATH, L"%ls\\Evict", local ? local : L".");
     CreateDirectoryW(data, NULL);
     wcsncpy(home, profile ? profile : L"C:\\", MAX_PATH - 1);
+    if (argv && argc == 2 && !wcscmp(argv[1], L"--background")) return background(inst);
     smoke = _wgetenv(L"EVICT_SMOKE");
     find_claude();
     find_trash();

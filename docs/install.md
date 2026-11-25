@@ -12,6 +12,14 @@ Evict is signed with a Developer ID and notarized by Apple, so it opens like any
 
 > **On first launch**, Evict asks for **Full Disk Access**. Without it, macOS interrupts the scan with one permission prompt per protected folder (Desktop, Documents, other apps' data…). Click **Open System Settings**, turn Evict on, and the scan starts by itself. **Scan Anyway** is still available.
 
+**Background scans**, when you turn them on in the Stats view, run from a LaunchAgent: macOS 13 and later list it under **System Settings → General → Login Items** ("Allow in the Background"). To uninstall Evict, turn them off first, or remove the agent from a terminal:
+
+```sh
+launchctl bootout gui/$(id -u)/com.vassilidev.evict.scan; rm -f ~/Library/LaunchAgents/com.vassilidev.evict.scan.plist
+```
+
+Then drag Evict to the Trash. Its history and caches are in `~/Library/Application Support/Evict` and `~/Library/Caches/com.vassilidev.evict`.
+
 ## Windows
 
 **[⬇ Download Evict-Setup.exe](https://github.com/vassilidev/evict/releases/latest/download/Evict-Setup.exe)**: one installer for every PC on Windows 10 or 11, Intel and AMD (x64), ARM64 and 32-bit (x86). It installs Evict for your account, no administrator rights needed, with a Start menu entry; uninstall it from **Settings → Apps**.

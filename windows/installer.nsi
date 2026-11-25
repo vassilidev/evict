@@ -92,6 +92,9 @@ FunctionEnd
 
 ; Only Evict's own files: a custom install folder may hold others
 Section "Uninstall"
+  ReadEnvStr $0 USERNAME
+  nsExec::Exec '"$SYSDIR\schtasks.exe" /Delete /TN "Evict background scan ($0)" /F'  ; the scheduled scans, if any
+  Pop $0
   !insertmacro CloseEvict
   Delete "$INSTDIR\evict-scan.exe"
   Delete "$INSTDIR\index.html"

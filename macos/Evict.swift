@@ -1,6 +1,7 @@
 import CryptoKit
 import Quartz
 import SwiftUI
+import UserNotifications
 import WebKit
 
 @main
@@ -10,6 +11,7 @@ struct EvictApp: App {
     init() {
         // `Evict --update`: check and install the latest release without any window (scripts, tests)
         if CommandLine.arguments.contains("--update") { Updater.commandLine() }
+        if CommandLine.arguments.contains("--background") { Background.run() }
     }
 
     var body: some Scene {
@@ -21,6 +23,7 @@ struct EvictApp: App {
                 .onAppear {
                     if model.state == .idle { model.start() }
                     model.watchForUpdates()
+                    Background.follow()
                 }
                 .pageColoredToolbar()
         }
@@ -194,7 +197,7 @@ final class Model: ObservableObject {
     nonisolated static func runScan(scanner: URL, template: URL, progress: @escaping @Sendable (String) -> Void) -> Result<URL, Error> {
         let process = Process(), out = Pipe(), err = Pipe()
         process.executableURL = scanner
-        process.arguments = ["/"]
+        process.arguments = ["--history", "/"]
         process.environment = ["EVICT_PROGRESS": "1", "HOME": NSHomeDirectory()]
         process.standardOutput = out
         process.standardError = err
@@ -226,6 +229,18 @@ final class Model: ObservableObject {
             err.fileHandleForReading.readabilityHandler = nil
             return .failure(error)
         }
+    }
+
+    // Background scans need Full Disk Access: without it, macOS would show its permission prompts to nobody
+    func schedule(_ every: String) {
+        let error = every != "off" && !hasFullDiskAccess ? "Background scans need Full Disk Access" : Background.set(every)
+        if error == nil && every != "off" { UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, _ in } }
+        showSchedule(error)
+    }
+
+    func showSchedule(_ error: String? = nil) {
+        let arg = error.flatMap { try? String(data: JSONEncoder().encode($0), encoding: .utf8) }.map { ", " + $0 } ?? ""
+        webView?.evaluateJavaScript("evictSchedule('\(Background.state())'\(arg))")
     }
 
     // Decimal units like Finder and the web page, always in English
@@ -752,10 +767,82 @@ final class Bridge: NSObject, WKScriptMessageHandler {
                 model.ask(id: id, prompt: prompt)
             case "cancel":
                 model.cancelAsk()
+            case "ready":
+                model.showSchedule()
+            case "schedule":
+                guard let every = body["every"] as? String, ["day", "week", "off"].contains(every) else { return }
+                model.schedule(every)
             default:
                 break
             }
         }
+    }
+}
+
+// Background scans: a LaunchAgent starts `Evict --background` every day or every week at 12:30 (launchd runs a missed
+// one when the Mac wakes up). It scans like the app, adds the scan to the history, and notifies when the disk grew
+// fast or runs out of space
+enum Background {
+    static let label = "com.vassilidev.evict.scan"
+    static let plist = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents/\(label).plist")
+
+    static func state() -> String {
+        guard let job = NSDictionary(contentsOf: plist), let when = job["StartCalendarInterval"] as? [String: Int] else { return "off" }
+        return when["Weekday"] != nil ? "week" : "day"
+    }
+
+    // Returns an error to show, nil when done
+    static func set(_ every: String) -> String? {
+        launchctl("bootout", "gui/\(getuid())/\(label)")
+        try? FileManager.default.removeItem(at: plist)
+        guard every != "off", let exe = Bundle.main.executablePath else { return nil }
+        var when = ["Hour": 12, "Minute": 30]
+        if every == "week" { when["Weekday"] = 1 }
+        let job: NSDictionary = ["Label": label, "ProgramArguments": [exe, "--background"], "StartCalendarInterval": when,
+                                 "ProcessType": "Background", "LowPriorityIO": true, "Nice": 10]
+        try? FileManager.default.createDirectory(at: plist.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard job.write(to: plist, atomically: true) else { return "Couldn’t save the schedule" }
+        launchctl("bootstrap", "gui/\(getuid())", plist.path)
+        return nil
+    }
+
+    // After the app moved (or was renamed), the agent follows it
+    static func follow() {
+        guard let job = NSDictionary(contentsOf: plist), let args = job["ProgramArguments"] as? [String],
+              args.first != Bundle.main.executablePath else { return }
+        _ = set(state())
+    }
+
+    static func run() -> Never {
+        guard FileHandle(forReadingAtPath: "/Library/Application Support/com.apple.TCC/TCC.db") != nil,
+              let scanner = Bundle.main.url(forAuxiliaryExecutable: "evict-scan") else { exit(0) }
+        let process = Process(), out = Pipe()
+        process.executableURL = scanner
+        process.arguments = ["--alert", "/"]
+        process.environment = ["HOME": NSHomeDirectory()]
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        process.qualityOfService = .background
+        guard (try? process.run()) != nil else { exit(1) }
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        process.waitUntilExit()
+        guard !text.isEmpty else { exit(0) }
+        let content = UNMutableNotificationContent()
+        content.title = "Evict"
+        content.body = text
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)) { _ in exit(0) }
+        dispatchMain()
+    }
+
+    @discardableResult private static func launchctl(_ args: String...) -> Int32 {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        process.arguments = args
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return -1 }
+        process.waitUntilExit()
+        return process.terminationStatus
     }
 }
 
